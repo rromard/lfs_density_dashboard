@@ -1,0 +1,509 @@
+---
+title: "Labour Union density in Canada"
+subtitle: "Where does the subtitle go?"
+author: "Ryan Romard"
+editor: visual
+format: 
+  dashboard:
+    scrolling: true
+    theme: 
+      light: sandstone
+      dark: sandstone
+server: shiny
+execute:
+  echo: false
+  warning: false
+---
+
+```{r}
+#| context: setup
+# Libraries, fonts themes
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dev = "svg")
+xfun::pkg_attach("tidyverse", "here", "scales", "qs", "targets",  "DT", "zoo", "patchwork", "ggiraph", "shiny", "rlang", "ggrepel", "vctrs")
+dashpal <-  c("#8f1f3f", "#d4ae0b", "#6F8FCF", "#de860b", "#3E7D49","#c73200", "#b7a4d6", "#767676", "#020101")
+dens_pal <- list(c(`Union member` = dashpal[3], `Not member` = "#DADDEF"),
+                      c(`Union member` = dashpal[1], `Not member` = "#DADDEF"))
+dens_pal_flat <- c("#DADDEF", dashpal[3], "#DADDEF",dashpal[1])
+
+theme_dash_rr <-
+  function(base_size = 14, legend = 'none') {
+    theme_minimal() %+replace%
+      theme(
+        text = element_text(size = 6),
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 16),
+        axis.title = element_text(size = 14),
+        plot.title = element_text(
+          size = 20,
+          hjust = 0,
+          face = 'bold',
+          margin = margin(b = 6)
+        ),
+        plot.subtitle = element_text(
+          size = 18,
+          hjust = 0,
+          margin = margin(b = 10)
+        ),
+        plot.title.position = 'plot',
+        plot.caption = element_text(
+          size = 12,
+          face = 'italic',
+          hjust = 1,
+          margin = margin(t = 10)
+        ),
+        panel.grid.minor = element_blank(),
+        legend.position = legend,
+        strip.text = element_text(
+          size = 16,
+          face = "bold",
+          color = "#353935",
+          margin = margin(b = 2, unit = "mm")
+        )
+      )
+  }
+```
+
+```{r}
+#| context: data
+#| include: false
+# Data import and prep
+lfs_freq <- qread(here('_targets', 'objects', 'lfs_freq'))
+
+# Summarize totals and averages by year
+chart_df <- lfs_freq |>
+  filter(
+    !is.na(varlevel),
+    union_bin != "Not applicable",
+    cowmain_rc != "Self-employed",
+    varlevel != "Non-earner"
+  ) |>
+  select(ref_date, variable, varlevel, cowmain_rc, union_bin, n_v, p_v) |>
+  mutate(
+    # Variable names to final labels
+    variable = case_when(
+      variable %in% c("nse", "ftptmain", "permtemp", "mjh") ~ "Employment status",
+      variable == "prov" ~ "Province",
+      variable == "cma" ~ "CMA",
+      variable == "age_12" ~ "Age (12 groups)",
+      variable == "sex" ~ "Gender",
+      variable == "educ_rc" ~ "Education",
+      variable == "fam_rc" ~ "Family type",
+      variable == "agyownk" ~ "Youngest child",
+      variable == "immig" ~ "Immigration",
+      variable == "naics_21" ~ "Industry",
+      variable == "noc_10" ~ "Occupation",
+      variable == "tenure_rc" ~ "Job tenure"
+    ),
+    union_bin = fct_rev(union_bin),
+    cowmain_rc = fct_relabel(cowmain_rc, \(x) str_remove(x, " employees")),
+    cowmain_rc = fct_rev(cowmain_rc),
+    survyear = year(ref_date),
+    
+    # Setting some industry level variables to missing manually
+    p_v = case_when(
+      variable == "Industry" &
+        cowmain_rc == "Public sector" &
+        varlevel %in% c(
+          "Agriculture",
+          "Accommodation and food services",
+          "Fishing, hunting and trapping",
+          "Forestry and logging and support activities for forestry",
+          "Manufacturing - durable goods",
+          "Manufacturing - non-durable goods",
+          "Mining, quarrying, and oil and gas extraction",
+          "Other services (except public administration)",
+          "Wholesale trade"
+        ) ~ NA,
+      variable == "Industry" &
+        cowmain_rc == "Private sector" &
+        varlevel == "Public administration" ~ NA,
+      .default = p_v
+    ),
+    
+    # Recoding some factor levels to be more compact
+    varlevel = case_when(
+      
+      # Province
+      varlevel == "Newfoundland and Labrador" ~ "Newfoundland",
+      varlevel == "Prince Edward Island" ~ "PEI",
+      
+      # Employment
+      varlevel == "Single jobholder, including job changers" ~ "Single jobholder",
+      varlevel == "Temporary, casual or other temporary jobs" ~ "Temporary, casual",
+      varlevel == "Temporary, seasonal job" ~ "Temporary, seasonal",
+      varlevel == "Temporary, term or contract job" ~ "Temporary, term/contract",
+      
+      varlevel == "Immigrant, landed 10 or less years earlier" ~ "Immigrant, here < 10 years",
+      varlevel == "Immigrant, landed more than 10 years earlier" ~ "Immigrant, here > 10 years",
+      
+      varlevel == "Not applicable" ~ "No children",
+      varlevel == "Youngest child less than 6 years" ~ "Under 6 years",
+      varlevel == "Youngest child 6 to 12 years" ~ "6-12 years",
+      varlevel == "Youngest child 13 to 17 years" ~ "13-17 years",
+      varlevel == "Youngest child 18 to 24 years" ~ "18-24 years",
+      
+      # Job tenure
+      varlevel ==  "[1,12)" ~ "Under 1 year",
+      varlevel ==  "[12,60)" ~ "1 to under 5",
+      varlevel ==  "[60,120)" ~ "5 to under 10",
+      varlevel ==  "[120,Inf]" ~ "10 years or more",
+      
+      # Industry
+      varlevel == "Accommodation and food services" ~ "Accomodation/Food",
+      varlevel == "Business, building and other support services" ~ "Business/Building/Other support services",
+      varlevel == "Educational services" ~ "Education",
+      varlevel == "Finance and insurance" ~ "Finance/Insurance",
+      varlevel == "Fishing, hunting and trapping" ~ "Fishing/Hunting/Trapping",
+      varlevel == "Forestry and logging and support activities for forestry" ~ "Forestry/Support activities",
+      varlevel == "Health care and social assistance" ~ "Health care/Social assistance",
+      varlevel == "Information, culture and recreation" ~ "Information/Culture/Recreation",
+      varlevel == "Manufacturing - durable goods" ~ "Manufacturing, durable",
+      varlevel == "Manufacturing - non-durable goods" ~ "Manufacturing, non-durable",
+      varlevel == "Mining, quarrying, and oil and gas extraction" ~ "Mining/Quarrying/Oil and gas",
+      varlevel == "Other services (except public administration)" ~ "Other services",
+      varlevel == "Professional, scientific and technical services" ~ "Professional/Scientific/Technical",
+      varlevel == "Real estate and rental and leasing" ~ "Real estate/Rental/Leasing",
+      varlevel == "Transportation and warehousing" ~ "Transportation/Warehousing",
+      
+      # Occupation
+      varlevel == "Business, finance and administration occupations, except management" ~ 
+        "Business/Finance/Administrative",
+      varlevel == "Health occupations, except management" ~ "Health",
+      varlevel == "Management occupations" ~ "Management",
+      varlevel == "Natural and applied sciences and related occupations, except management" ~ "Natural/Applied sciences",
+      varlevel == "Natural resources, agriculture and related production occupations, except management" ~ "Natural resources/Agriculture/Related",
+      varlevel == "Occupations in art, culture, recreation and sport, except management" ~ "Art/Culture/Recreation/Sport",
+      varlevel == "Occupations in education, law and social, community and government services, except management" ~ 
+        "Education/Law/Social, community and govt services",
+      varlevel == "Occupations in manufacturing and utilities, except management" ~ "Manufacturing/Utilities",
+      varlevel == "Sales and service occupations, except management" ~ "Sales/Service",
+      varlevel == "Trades, transport and equipment operators and related occupations, except management" ~ "Trades/Transport/Equipment operators",
+      .default = as.character(varlevel)
+    )
+  ) |>
+  group_by(survyear, variable, varlevel, cowmain_rc, union_bin) |>
+  summarise(p_v = mean(p_v, na.rm = TRUE),
+            n_v = mean(n_v, na.rm = TRUE)) |>
+  ungroup()
+
+# Dataframe full of default factor levels
+factor_levels <- 
+  tribble(~varlevel, ~variable,
+          
+   # Age
+  "15 to 19 years","Age (12 groups)",
+  "20 to 24 years","Age (12 groups)",
+  "25 to 29 years","Age (12 groups)",
+  "30 to 34 years","Age (12 groups)",
+  "35 to 39 years","Age (12 groups)",
+  "40 to 44 years","Age (12 groups)",
+  "45 to 49 years","Age (12 groups)",
+  "50 to 54 years","Age (12 groups)",
+  "55 to 59 years","Age (12 groups)",
+  "60 to 64 years","Age (12 groups)",
+  "65 to 69 years","Age (12 groups)",
+  "70 and over","Age (12 groups)",
+  
+  # CMA
+  "Calgary","CMA",
+  "Edmonton","CMA",
+  "Hamilton","CMA",
+  "Montréal","CMA",
+  "Other CMA or non-CMA","CMA",
+  "Ottawa–Gatineau (Ontario part)","CMA",
+  "Québec","CMA",
+  "Toronto","CMA",
+  "Vancouver","CMA",
+  "Winnipeg","CMA",
+  
+  # Province
+  "Alberta","Province",
+  "British Columbia","Province",
+  "Manitoba","Province",
+  "New Brunswick","Province",
+  "Newfoundland and Labrador","Province",
+  "Nova Scotia","Province",
+  "Ontario","Province",
+  "Prince Edward Island","Province",
+  "Quebec","Province",
+  "Saskatchewan","Province",
+  
+  # Education
+  "Under secondary", "Education",
+  "Secondary/Some PSE", "Education",
+  "College","Education",
+  "Undergraduate","Education",
+  "Graduate","Education",
+  
+  # Family type
+  "Dual-earner","Family type",
+  "Single-earner","Family type",
+  "Not in econ family","Family type",
+  "Lone-parent","Family type",
+  "Other families","Family type",
+
+  # Gender
+  "Female","Gender",
+  "Male","Gender",
+  
+  # Immigration
+  "Non-immigrant","Immigration",
+  "Immigrant, here > 10 years","Immigration",
+  "Immigrant, here < 10 years","Immigration",
+  
+  # Employment
+  "Standard employment","Employment status",
+  "Non-standard employment","Employment status",
+  "Full-time","Employment status",
+  "Part-time","Employment status",
+  "Multiple jobholder","Employment status",
+  "Single jobholder","Employment status",
+  "Permanent","Employment status",
+  "Temporary, casual","Employment status",
+  "Temporary, seasonal","Employment status",
+  "Temporary, term/contract","Employment status",
+    
+  # Job tenure
+  "Under 1 year","Job tenure",
+  "1 to under 5","Job tenure",
+  "5 to under 10","Job tenure",
+  "10 years or more","Job tenure",
+
+  # Industry
+  "Accomodation/Food","Industry",
+  "Agriculture","Industry",
+  "Business/Building/Other support services","Industry",
+  "Construction","Industry",
+  "Education","Industry",
+  "Finance/Insurance","Industry",
+  "Fishing/Hunting/Trapping","Industry",
+  "Forestry/Support activities","Industry",
+  "Health care/Social assistance","Industry",
+  "Information/Culture/Recreation","Industry",
+  "Manufacturing, durable","Industry",
+  "Manufacturing, non-durable","Industry",
+  "Mining/Quarrying/Oil and gas","Industry",
+  "Other services","Industry",
+  "Professional/Scientific/Technical","Industry",
+  "Public administration","Industry",
+  "Real estate/Rental/Leasing","Industry",
+  "Retail trade","Industry",
+  "Transportation/Warehousing","Industry",
+  "Utilities","Industry",
+  "Wholesale trade","Industry",
+
+  # Occupation
+  "Business/Finance/Administrative","Occupation",
+  "Health","Occupation",
+  "Management","Occupation",
+  "Natural/Applied sciences","Occupation",
+  "Natural resources/Agriculture/Related","Occupation",
+  "Art/Culture/Recreation/Sport","Occupation",
+  "Education/Law/Social, community and govt services","Occupation",
+  "Manufacturing/Utilities","Occupation",
+  "Sales/Service","Occupation",
+  "Trades/Transport/Equipment operators","Occupation",
+  
+  # Youngest child
+  "No children","Youngest child",
+  "Under 6 years","Youngest child",
+  "6-12 years","Youngest child",
+  "13-17 years","Youngest child",
+  "18-24 years","Youngest child"
+)
+
+# Pull main variables for selector list
+dash_vars <- chart_df |> distinct(variable) |> pull() |> as.character()
+dash_vars_order <- c("Province", "CMA", "Age (12 groups)", "Education", "Gender", "Family type", "Youngest child", "Immigration", "Occupation","Industry","Employment status", "Job tenure")
+dash_vars <- dash_vars[order(match(dash_vars, dash_vars_order))]
+```
+
+#  {.toolbar}
+
+```{r}
+selectInput("variable", label = "Select variable", choices = dash_vars, width = "400px")
+selectInput("gg_layout", label = 'Layout', choices = c("Vertical", "Horizontal"))
+```
+
+# Plot
+
+```{r}
+#| fill: false
+#| flow: true
+#| dev: "svg"
+#| warning: false
+plotOutput('plot', height = "100%", width = "100%")
+```
+
+# Data
+
+```{r}
+tableOutput('data')
+```
+
+```{r}
+#| context: server
+
+# Default factor levels
+flevels <- reactive({
+  req(input$variable)
+  factor_levels[factor_levels$variable == input$variable, ] |> 
+    pull(varlevel) |> as.character()
+})
+
+# Create data set, reactive
+dataset <- reactive({
+  req(input$variable)
+  df <- chart_df[chart_df$variable == input$variable, ] |> 
+    mutate(varlevel = factor(varlevel, levels = flevels()))
+})
+
+# Programmatic chart and output height
+n_facets <- function() {
+  return (500 * ( distinct(dataset(), varlevel) |> nrow() /  2) )
+}
+
+# Number of facets desired by variable
+num_rows <- reactive(case_when(
+      input$variable %in% c("Gender") ~ 1,
+      input$variable %in% c("Education", "Family type", "Youngest child", 
+                      "Immigration", "Job tenure") ~ 2,
+      input$variable %in% c("Age (12 groups)", "Province", "CMA", "Occupation",  "Employment status") ~ 4,
+      input$variable %in% c("Industry") ~ 7
+      )
+)
+
+# Base plot function
+union_density_gg <- function(.data, pal) {
+  
+  # For ordering plots by average values of coverage
+  if (input$gg_layout == "Horizontal") {
+    horiz_levels <- filter(.data, union_bin == "Union member") |> 
+      group_by(varlevel) |> reframe(p_v = mean(p_v)) |> arrange(-p_v) |> pull(varlevel)
+    
+    .data <- mutate(.data, varlevel = factor(varlevel, levels = horiz_levels))
+  }
+
+  gg <- ggplot(
+    .data,
+    aes(
+      x = .data$survyear,
+      y = .data$p_v,
+      fill = .data$union_bin,
+      color = .data$union_bin
+    )
+  ) +
+    geom_area(alpha = 0.55) +
+    geom_point_interactive(data = filter(.data, union_bin == "Union member"),
+                           size = 2.25) +
+    geom_hline(yintercept = 0, color = "#d8d8d8") +
+    coord_cartesian(clip = "off") +
+    scale_y_continuous(labels = label_percent(), limits = c(0, 1), expand = c(0,0)) +
+    scale_fill_manual(values = pal, na.value = "#DADDEF") +
+    scale_color_manual(values = pal, na.value = "#DADDEF") +
+    theme_dash_rr() +
+    theme(
+      panel.grid = element_blank(),
+      strip.text = element_text(
+        size = 18,
+        hjust = 0,
+        color = "#353935"
+      ),
+      axis.text.y.left = element_blank(),
+      panel.spacing.y = unit(15, "pt")
+    ) +
+    labs(x = NULL, y = NULL)
+  
+  # Vertical layout
+  if (input$gg_layout == "Vertical") {
+    gg + 
+      geom_text_interactive(
+        data = filter(.data,
+          union_bin == "Union member",
+          survyear %in% seq(2006, 2024, by = 3)
+        ),
+        aes(label = percent(.data$p_v, accuracy = .1)),
+        vjust = 0,
+        #hjust = 0.42,
+        hjust = 0.5,
+        nudge_y = .04,
+        # direction = "y",
+        fontface = "bold",
+        size = 6
+      ) +
+      scale_x_continuous(expand = c(0.05, 0.05),
+                       breaks = seq(2006, 2024, by = 3),
+                       guide = guide_axis(check.overlap = TRUE)
+                       ) +
+      facet_wrap(vars(varlevel),
+                    ncol = 1,
+                    dir = "v",
+                    axes = "all_x")
+    
+    # Horizontal layout
+  } else if (input$gg_layout == "Horizontal")
+  
+    gg +
+      geom_text_interactive(
+        data = filter(.data,
+          union_bin == "Union member",
+          survyear %in% seq(2006, 2024, by = 6)
+        ),
+        aes(label = percent(.data$p_v, accuracy = .1)),
+        vjust = 0,
+        #hjust = 0.42,
+        hjust = 0.5,
+        nudge_y = .04,
+        check_overlap = TRUE,
+        fontface = "bold",
+        size = 6,
+      ) +
+    theme(panel.spacing.x = unit(10, "pt"),
+          axis.text.x = element_text(hjust = c(0,1)),
+          strip.clip = "on") +
+    scale_x_continuous(expand = c(0.05, 0.05),
+                       breaks = c(2006, 2024),
+                       guide = guide_axis(check.overlap = TRUE)) +
+    facet_wrap(vars(fct_reorder(varlevel, p_v, na.rm = TRUE)), nrow = num_rows(), dir = "h", axes = "all_x",
+               drop = TRUE,
+               labeller = label_wrap_gen(width = 30))
+}
+
+# Create two charts per sector, patchwork into one chart
+union_density_patch <- function(df, pal) {
+  
+  facet_blank <- function(str) {str_replace_all(str, ".", "")}
+  
+  ggs <- group_by(df, cowmain_rc) |> 
+    group_split() |> 
+    map2(pal, \(x,y) union_density_gg(x, y))
+  
+  ggs[[1]] <- ggs[[1]] + 
+    ggtitle("PRIVATE SECTOR", subtitle = "Share of paid employees that are union members") +
+    theme(plot.title = element_text(color = dashpal[3]))
+  
+  ggs[[2]] <- ggs[[2]] + 
+    ggtitle("PUBLIC SECTOR", subtitle = "Share of paid employees that are union members") +
+    theme(plot.title = element_text(color = dashpal[1]))
+  
+  if(input$gg_layout == "Vertical") {
+    ggs[[1]] + ggs[[2]]
+  } else if (input$gg_layout == "Horizontal") {
+    ggs[[1]] / ggs[[2]]
+  }
+}
+
+output$plot <- renderPlot({
+  p <- union_density_patch(dataset(), dens_pal)
+  return(p)
+  
+}, height = n_facets
+)
+
+output$data <- renderTable({
+  dataset()
+})
+```
+
+
+

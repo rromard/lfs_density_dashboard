@@ -27,8 +27,17 @@ lfs_variable_recode <- function(df) {
         "Employed" = c("Employed, at work", "Employed, absent from work")
       ),
       
-      # Binary union measure, member or covered by CA
+      # Binary union measure, member or not
       union_bin = fct_collapse(
+        union,
+        "Not member" = c(
+          "Non-unionized",
+          "Not a member but covered by a union contract or collective agreement"
+        )
+      ),
+      
+      # Binary union measure, member or covered by CA
+      union_cov = fct_collapse(
         union,
         "Member/Covered" = c(
           "Union member",
@@ -93,7 +102,8 @@ lfs_variable_recode <- function(df) {
       # Education
       educ_rc = case_when(
         educ %in% c("0 to 8 years", "Some high school") ~ "Under secondary",
-        educ == "High school graduate" ~ "Secondary",
+        educ == "High school graduate" ~ "Secondary/Some PSE",
+        educ == "Some postsecondary" ~ "Secondary/Some PSE",
         educ == "Bachelor's degree" ~ "Undergraduate",
         educ == "Above bachelor's degree" ~ "Graduate",
         educ == "Postsecondary certificate or diploma" ~ "College",
@@ -102,8 +112,7 @@ lfs_variable_recode <- function(df) {
       educ_rc = as_factor(educ_rc),
       educ_rc = fct_relevel(educ_rc,
                             "Under secondary",
-                            "Secondary",
-                            "Some postsecondary",
+                            "Secondary/Some PSE",
                             "College",
                             "Undergraduate",
                             "Graduate"

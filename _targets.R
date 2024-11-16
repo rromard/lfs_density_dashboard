@@ -30,5 +30,11 @@ list(
   tar_target(
     lfs_freq,
     lfs_freq_prop(lfs_prep, lfs_params)
+  ),
+  tar_target(
+    lfs_freq_file, "data/lfs_freq.csv", format = "file"
+  ),
+  tar_target(
+    lfs_freq_out, write_csv(lfs_freq, lfs_freq_file),
   )
 )
