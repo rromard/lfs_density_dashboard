@@ -1,6 +1,5 @@
 ---
 title: "Labour Union density in Canada"
-subtitle: "Where does the subtitle go?"
 author: "Ryan Romard"
 editor: visual
 format: 
@@ -8,7 +7,7 @@ format:
     scrolling: true
     theme: 
       light: sandstone
-      dark: sandstone
+      dark: slate
 server: shiny
 execute:
   echo: false
@@ -19,11 +18,11 @@ execute:
 #| context: setup
 # Libraries, fonts themes
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dev = "svg")
-xfun::pkg_attach("tidyverse", "here", "scales", "qs", "targets",  "DT", "zoo", "patchwork", "ggiraph", "shiny", "rlang", "ggrepel", "vctrs")
-dashpal <-  c("#8f1f3f", "#d4ae0b", "#6F8FCF", "#de860b", "#3E7D49","#c73200", "#b7a4d6", "#767676", "#020101")
-dens_pal <- list(c(`Union member` = dashpal[3], `Not member` = "#DADDEF"),
+xfun::pkg_attach("tidyverse", "here", "scales", "qs", "targets",  "DT", "zoo", "patchwork", "ggiraph", "shiny", "rlang", "ggrepel", "vctrs", "ggtext")
+dashpal <-  c("#8f1f3f", "#6F8FCF", "#de860b","#d4ae0b", "#3E7D49","#c73200", "#b7a4d6", "#767676", "#020101")
+dens_pal <- list(c(`Union member` = dashpal[2], `Not member` = "#DADDEF"),
                       c(`Union member` = dashpal[1], `Not member` = "#DADDEF"))
-dens_pal_flat <- c("#DADDEF", dashpal[3], "#DADDEF",dashpal[1])
+dens_pal_flat <- c("#DADDEF", dashpal[2], "#DADDEF",dashpal[1])
 
 theme_dash_rr <-
   function(base_size = 14, legend = 'none') {
@@ -34,13 +33,13 @@ theme_dash_rr <-
         axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 14),
         plot.title = element_text(
-          size = 20,
+          size = 18,
           hjust = 0,
           face = 'bold',
           margin = margin(b = 6)
         ),
         plot.subtitle = element_text(
-          size = 18,
+          size = 16,
           hjust = 0,
           margin = margin(b = 10)
         ),
@@ -54,7 +53,7 @@ theme_dash_rr <-
         panel.grid.minor = element_blank(),
         legend.position = legend,
         strip.text = element_text(
-          size = 16,
+          size = 14,
           face = "bold",
           color = "#353935",
           margin = margin(b = 2, unit = "mm")
@@ -221,10 +220,10 @@ factor_levels <-
   "British Columbia","Province",
   "Manitoba","Province",
   "New Brunswick","Province",
-  "Newfoundland and Labrador","Province",
+  "Newfoundland","Province",
   "Nova Scotia","Province",
   "Ontario","Province",
-  "Prince Edward Island","Province",
+  "PEI","Province",
   "Quebec","Province",
   "Saskatchewan","Province",
   
@@ -330,9 +329,7 @@ selectInput("gg_layout", label = 'Layout', choices = c("Vertical", "Horizontal")
 ```{r}
 #| fill: false
 #| flow: true
-#| dev: "svg"
-#| warning: false
-plotOutput('plot', height = "100%", width = "100%")
+girafeOutput('plot')
 ```
 
 # Data
@@ -357,11 +354,6 @@ dataset <- reactive({
   df <- chart_df[chart_df$variable == input$variable, ] |> 
     mutate(varlevel = factor(varlevel, levels = flevels()))
 })
-
-# Programmatic chart and output height
-n_facets <- function() {
-  return (500 * ( distinct(dataset(), varlevel) |> nrow() /  2) )
-}
 
 # Number of facets desired by variable
 num_rows <- reactive(case_when(
@@ -394,8 +386,11 @@ union_density_gg <- function(.data, pal) {
     )
   ) +
     geom_area(alpha = 0.55) +
-    geom_point_interactive(data = filter(.data, union_bin == "Union member"),
-                           size = 2.25) +
+    geom_point_interactive(
+      data = filter(.data, union_bin == "Union member"),
+      aes(tooltip = percent(p_v, accuracy = .1), data_id = survyear),
+      size = 2.25
+      ) +
     geom_hline(yintercept = 0, color = "#d8d8d8") +
     coord_cartesian(clip = "off") +
     scale_y_continuous(labels = label_percent(), limits = c(0, 1), expand = c(0,0)) +
@@ -458,12 +453,12 @@ union_density_gg <- function(.data, pal) {
         fontface = "bold",
         size = 6,
       ) +
-    theme(panel.spacing.x = unit(10, "pt"),
-          axis.text.x = element_text(hjust = c(0,1)),
-          strip.clip = "on") +
     scale_x_continuous(expand = c(0.05, 0.05),
                        breaks = c(2006, 2024),
                        guide = guide_axis(check.overlap = TRUE)) +
+    theme(panel.spacing.x = unit(12, "pt"),
+          axis.text.x = element_markdown(hjust = c(0,1)),
+          strip.clip = "on") +
     facet_wrap(vars(fct_reorder(varlevel, p_v, na.rm = TRUE)), nrow = num_rows(), dir = "h", axes = "all_x",
                drop = TRUE,
                labeller = label_wrap_gen(width = 30))
@@ -480,7 +475,7 @@ union_density_patch <- function(df, pal) {
   
   ggs[[1]] <- ggs[[1]] + 
     ggtitle("PRIVATE SECTOR", subtitle = "Share of paid employees that are union members") +
-    theme(plot.title = element_text(color = dashpal[3]))
+    theme(plot.title = element_text(color = dashpal[2]))
   
   ggs[[2]] <- ggs[[2]] + 
     ggtitle("PUBLIC SECTOR", subtitle = "Share of paid employees that are union members") +
@@ -493,17 +488,28 @@ union_density_patch <- function(df, pal) {
   }
 }
 
-output$plot <- renderPlot({
-  p <- union_density_patch(dataset(), dens_pal)
-  return(p)
-  
-}, height = n_facets
-)
+# Programmatic chart and output height
+# n_facets <- function() {
+#   return (500 * ( distinct(dataset(), varlevel) |> nrow() /  2) )
+# }
+
+# Programmatic chart and output height (has to be in inches for ggiraph)
+p_height <- reactive({5 * num_rows()})
+
+output$plot <- renderGirafe({
+  gg <- union_density_patch(dataset(), dens_pal)
+  gg_i <- ggiraph:: girafe(
+    ggobj = gg,
+   # height_svg = p_height(),
+   #  width_svg = 10,
+    options = list(
+      opts_tooltip(use_fill = TRUE), 
+      opts_sizing(width = 1, rescale = TRUE))
+  )
+  return(gg_i)
+})
 
 output$data <- renderTable({
   dataset()
 })
 ```
-
-
-
