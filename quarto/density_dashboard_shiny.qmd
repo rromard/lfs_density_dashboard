@@ -1,13 +1,13 @@
 ---
-title: "Labour Union density in Canada"
+title: "A Data Portrait of Unions Members in Canada"
 author: "Ryan Romard"
 editor: visual
 format: 
   dashboard:
     scrolling: true
     theme: 
-      light: sandstone
-      dark: slate
+      - sandstone
+      - lfs_dash_style.css
 server: shiny
 execute:
   echo: false
@@ -18,13 +18,17 @@ execute:
 #| context: setup
 # Libraries, fonts themes
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dev = "svg")
-xfun::pkg_attach("tidyverse", "here", "scales", "qs", "targets",  "DT", "zoo", "patchwork", "ggiraph", "shiny", "rlang", "ggrepel", "vctrs", "ggtext")
-dashpal <-  c("#8f1f3f", "#6F8FCF", "#de860b","#d4ae0b", "#3E7D49","#c73200", "#b7a4d6", "#767676", "#020101")
+xfun::pkg_attach("tidyverse", "here", "scales", "qs", "zoo", "patchwork", "shiny", "rlang", "ggrepel", "ggtext", "ggfittext", "kableExtra")
+
+dashpal <-  c("#8f1f3f", "#6F8FCF","#d4ae0b", "#de860b", "#3E7D49","#c73200", "#b7a4d6", "#767676", "#020101")
 dens_pal <- list(c(`Union member` = dashpal[2], `Not member` = "#DADDEF"),
                       c(`Union member` = dashpal[1], `Not member` = "#DADDEF"))
-dens_pal_flat <- c("#DADDEF", dashpal[2], "#DADDEF",dashpal[1])
+bar_pal <- list(
+  c(`yes` = dashpal[2], `no` = "#DADDEF"),  # private
+  c(`yes` = dashpal[1], `no` = "#DADDEF")  # public
+)
 
-theme_dash_rr <-
+theme_rr_dash <-
   function(base_size = 14, legend = 'none') {
     theme_minimal() %+replace%
       theme(
@@ -33,13 +37,13 @@ theme_dash_rr <-
         axis.text.x = element_text(size = 16),
         axis.title = element_text(size = 14),
         plot.title = element_text(
-          size = 18,
+          size = 20,
           hjust = 0,
           face = 'bold',
           margin = margin(b = 6)
         ),
         plot.subtitle = element_text(
-          size = 16,
+          size = 18,
           hjust = 0,
           margin = margin(b = 10)
         ),
@@ -53,10 +57,11 @@ theme_dash_rr <-
         panel.grid.minor = element_blank(),
         legend.position = legend,
         strip.text = element_text(
-          size = 14,
+          size = 18,
           face = "bold",
           color = "#353935",
-          margin = margin(b = 2, unit = "mm")
+          hjust = 0,
+          margin = margin(b = 5, unit = "mm")
         )
       )
   }
@@ -78,6 +83,7 @@ chart_df <- lfs_freq |>
   ) |>
   select(ref_date, variable, varlevel, cowmain_rc, union_bin, n_v, p_v) |>
   mutate(
+    var_orig = variable,
     # Variable names to final labels
     variable = case_when(
       variable %in% c("nse", "ftptmain", "permtemp", "mjh") ~ "Employment status",
@@ -179,7 +185,13 @@ chart_df <- lfs_freq |>
       varlevel == "Trades, transport and equipment operators and related occupations, except management" ~ "Trades/Transport/Equipment operators",
       .default = as.character(varlevel)
     )
-  ) |>
+  ) 
+
+# Get original variable list
+orig_vars <- chart_df |> distinct(variable, var_orig, varlevel)
+
+# Summarize the data from monthly to yearly
+chart_df <- chart_df |> 
   group_by(survyear, variable, varlevel, cowmain_rc, union_bin) |>
   summarise(p_v = mean(p_v, na.rm = TRUE),
             n_v = mean(n_v, na.rm = TRUE)) |>
@@ -317,25 +329,62 @@ dash_vars_order <- c("Province", "CMA", "Age (12 groups)", "Education", "Gender"
 dash_vars <- dash_vars[order(match(dash_vars, dash_vars_order))]
 ```
 
-#  {.toolbar}
+# Home
+
+Here is a home page with some information, attribution, instructions etc.
+
+# Density
+
+##  {.toolbar}
 
 ```{r}
-selectInput("variable", label = "Select variable", choices = dash_vars, width = "400px")
+selectInput("variable", label = "Select variable", choices = dash_vars)
 selectInput("gg_layout", label = 'Layout', choices = c("Vertical", "Horizontal"))
 ```
 
-# Plot
+## Content
 
 ```{r}
 #| fill: false
 #| flow: true
-girafeOutput('plot')
+#| dev: "svg"
+#| warning: false
+plotOutput('plot_dens', height = "100%", width = "100%")
+```
+
+# Demographics
+
+##  {.toolbar}
+
+```{r}
+selectInput("variable", label = "Select variable", choices = dash_vars)
+selectInput("gg_layout", label = 'Layout', choices = c("Vertical", "Horizontal"))
+selectInput("gg_measure", label = 'Measure', choices = c("Proportion", "Count"))
+```
+
+## Content
+
+```{r}
+#| fill: false
+#| flow: true
+#| dev: "svg"
+#| warning: false
+plotOutput('plot_pop', height = "100%", width = "100%")
 ```
 
 # Data
 
+##  {.toolbar}
+
 ```{r}
-tableOutput('data')
+selectInput("variable", label = "Select variable", choices = dash_vars)
+selectInput("tab_measure", label = "Select variable", choices = c("Density", "Proportion", "count"))
+```
+
+## Content
+
+```{r}
+tableOutput('table')
 ```
 
 ```{r}
@@ -355,27 +404,33 @@ dataset <- reactive({
     mutate(varlevel = factor(varlevel, levels = flevels()))
 })
 
+# Programmatic chart and output height
+n_facets <- function() {
+  return (500 * ( distinct(dataset(), varlevel) |> nrow() /  2) )
+}
+
 # Number of facets desired by variable
 num_rows <- reactive(case_when(
       input$variable %in% c("Gender") ~ 1,
       input$variable %in% c("Education", "Family type", "Youngest child", 
                       "Immigration", "Job tenure") ~ 2,
-      input$variable %in% c("Age (12 groups)", "Province", "CMA", "Occupation",  "Employment status") ~ 4,
+      input$variable %in% 
+        c("Age (12 groups)", "Province", "CMA", "Occupation",  "Employment status") ~ 4,
       input$variable %in% c("Industry") ~ 7
       )
 )
 
-# Base plot function
+##### Base plot functions
+# Union density
 union_density_gg <- function(.data, pal) {
-  
   # For ordering plots by average values of coverage
   if (input$gg_layout == "Horizontal") {
-    horiz_levels <- filter(.data, union_bin == "Union member") |> 
+    horiz_levels <- filter(.data, union_bin == "Union member") |>
       group_by(varlevel) |> reframe(p_v = mean(p_v)) |> arrange(-p_v) |> pull(varlevel)
     
     .data <- mutate(.data, varlevel = factor(varlevel, levels = horiz_levels))
   }
-
+  
   gg <- ggplot(
     .data,
     aes(
@@ -386,24 +441,18 @@ union_density_gg <- function(.data, pal) {
     )
   ) +
     geom_area(alpha = 0.55) +
-    geom_point_interactive(
-      data = filter(.data, union_bin == "Union member"),
-      aes(tooltip = percent(p_v, accuracy = .1), data_id = survyear),
-      size = 2.25
-      ) +
+    geom_point(data = filter(.data, union_bin == "Union member"),
+               size = 2.25) +
     geom_hline(yintercept = 0, color = "#d8d8d8") +
     coord_cartesian(clip = "off") +
-    scale_y_continuous(labels = label_percent(), limits = c(0, 1), expand = c(0,0)) +
+    scale_y_continuous(labels = label_percent(),
+                       limits = c(0, 1),
+                       expand = c(0, 0)) +
     scale_fill_manual(values = pal, na.value = "#DADDEF") +
     scale_color_manual(values = pal, na.value = "#DADDEF") +
-    theme_dash_rr() +
+    theme_rr_dash() +
     theme(
       panel.grid = element_blank(),
-      strip.text = element_text(
-        size = 18,
-        hjust = 0,
-        color = "#353935"
-      ),
       axis.text.y.left = element_blank(),
       panel.spacing.y = unit(15, "pt")
     ) +
@@ -411,57 +460,67 @@ union_density_gg <- function(.data, pal) {
   
   # Vertical layout
   if (input$gg_layout == "Vertical") {
-    gg + 
-      geom_text_interactive(
-        data = filter(.data,
+    gg +
+      geom_text(
+        data = filter(
+          .data,
           union_bin == "Union member",
           survyear %in% seq(2006, 2024, by = 3)
         ),
         aes(label = percent(.data$p_v, accuracy = .1)),
         vjust = 0,
-        #hjust = 0.42,
         hjust = 0.5,
         nudge_y = .04,
-        # direction = "y",
         fontface = "bold",
         size = 6
       ) +
-      scale_x_continuous(expand = c(0.05, 0.05),
-                       breaks = seq(2006, 2024, by = 3),
-                       guide = guide_axis(check.overlap = TRUE)
-                       ) +
+      scale_x_continuous(
+        expand = c(0.05, 0.05),
+        breaks = seq(2006, 2024, by = 3),
+        guide = guide_axis(check.overlap = TRUE)
+      ) +
       facet_wrap(vars(varlevel),
-                    ncol = 1,
-                    dir = "v",
-                    axes = "all_x")
+                 ncol = 1,
+                 dir = "v",
+                 axes = "all_x")
     
     # Horizontal layout
   } else if (input$gg_layout == "Horizontal")
-  
+    
     gg +
-      geom_text_interactive(
-        data = filter(.data,
-          union_bin == "Union member",
-          survyear %in% seq(2006, 2024, by = 6)
-        ),
-        aes(label = percent(.data$p_v, accuracy = .1)),
-        vjust = 0,
-        #hjust = 0.42,
-        hjust = 0.5,
-        nudge_y = .04,
-        check_overlap = TRUE,
-        fontface = "bold",
-        size = 6,
-      ) +
-    scale_x_continuous(expand = c(0.05, 0.05),
-                       breaks = c(2006, 2024),
-                       guide = guide_axis(check.overlap = TRUE)) +
-    theme(panel.spacing.x = unit(12, "pt"),
-          axis.text.x = element_markdown(hjust = c(0,1)),
-          strip.clip = "on") +
-    facet_wrap(vars(fct_reorder(varlevel, p_v, na.rm = TRUE)), nrow = num_rows(), dir = "h", axes = "all_x",
-               drop = TRUE,
-               labeller = label_wrap_gen(width = 30))
+    geom_text(
+      data = filter(
+        .data,
+        union_bin == "Union member",
+        survyear %in% seq(2006, 2024, by = 6)
+      ),
+      aes(label = percent(.data$p_v, accuracy = .1)),
+      vjust = 0,
+      #hjust = 0.42,
+      hjust = 0.5,
+      nudge_y = .04,
+      check_overlap = TRUE,
+      fontface = "bold",
+      size = 6,
+    ) +
+    theme(
+      panel.spacing.x = unit(10, "pt"),
+      axis.text.x = element_markdown(hjust = c(0, 1)),
+      strip.clip = "on"
+    ) +
+    scale_x_continuous(
+      expand = c(0.05, 0.05),
+      breaks = c(2006, 2024),
+      guide = guide_axis(check.overlap = TRUE)
+    ) +
+    facet_wrap(
+      vars(fct_reorder(varlevel, p_v, na.rm = TRUE)),
+      nrow = num_rows(),
+      dir = "h",
+      axes = "all_x",
+      drop = TRUE,
+      labeller = label_wrap_gen(width = 30)
+    )
 }
 
 # Create two charts per sector, patchwork into one chart
@@ -488,27 +547,292 @@ union_density_patch <- function(df, pal) {
   }
 }
 
-# Programmatic chart and output height
-# n_facets <- function() {
-#   return (500 * ( distinct(dataset(), varlevel) |> nrow() /  2) )
-# }
+# Render density plots
+output$plot_dens <- renderPlot({
+  p <- union_density_patch(dataset(), dens_pal)
+  return(p)
+  
+}, height = n_facets
+)
 
-# Programmatic chart and output height (has to be in inches for ggiraph)
-p_height <- reactive({5 * num_rows()})
-
-output$plot <- renderGirafe({
-  gg <- union_density_patch(dataset(), dens_pal)
-  gg_i <- ggiraph:: girafe(
-    ggobj = gg,
-   # height_svg = p_height(),
-   #  width_svg = 10,
-    options = list(
-      opts_tooltip(use_fill = TRUE), 
-      opts_sizing(width = 1, rescale = TRUE))
-  )
-  return(gg_i)
+##### Member demographics
+# Bar charts
+## Subset reactive dataset to union members only
+## Calculate the demographic propoertions of union members + bar chart backdrop
+dataset_pop <- reactive({
+  df <- chart_df[chart_df$variable == input$variable, ] |>
+    mutate(varlevel = factor(varlevel, levels = flevels())) |>
+    filter(union_bin == "Union member") |>
+    select(-union_bin) |> 
+    group_by(survyear, cowmain_rc) |>
+    mutate(
+      p_memb = n_v / sum(n_v),
+      p_memb_bd = 1 - p_memb,
+      cowmain_rc = as_factor(as.character(cowmain_rc))
+      )
 })
 
+# Calculate population totals per variable level
+pop_totals <- reactive({dataset_pop() |> 
+  filter(survyear==2024) |> 
+  group_by(survyear, varlevel) |> 
+  reframe(n_v = sum(n_v), p_memb = sum(p_memb)) |> 
+  arrange(-n_v)
+})
+
+# Create character vector for default factor ordering
+pop_levels <- reactive({pop_totals() |> 
+  pull(varlevel) |> 
+  as.character()
+})
+
+# Bar chart function
+union_bars_gg <- function(.data, pal) {
+  .data <- filter(.data, survyear %in% seq(2006, 2024, by = 3))
+  
+  # For ordering plots by average values horizontally - Proportions
+  if (input$gg_layout == "Horizontal" &
+      input$gg_measure == "Proportion") {
+    horiz_levels <- group_by(.data, varlevel) |>
+      reframe(p_memb = mean(p_memb)) |>
+      arrange(-p_memb) |>
+      pull(varlevel)
+    
+    .data <- mutate(.data, varlevel = factor(varlevel, levels = horiz_levels))
+    
+    # For ordering plots by average values horizontally - Counts
+  } else if (input$gg_layout == "Horizontal" &
+             input$gg_measure == "Count") {
+    horiz_levels <- group_by(.data, varlevel) |>
+      reframe(n_v = sum(n_v)) |>
+      arrange(-n_v) |>
+      pull(varlevel)
+    
+    .data <- mutate(.data, varlevel = factor(varlevel, levels = horiz_levels))
+  }
+  
+  ##### FOR PROPORTIONS
+  if (input$gg_measure == "Proportion") {
+    .data <- select(.data,
+                    survyear,
+                    variable,
+                    varlevel,
+                    cowmain_rc,
+                    p_memb,
+                    p_memb_bd) |>
+      pivot_longer(
+        cols = p_memb:p_memb_bd,
+        names_to = "fillvar",
+        values_to = "p_memb"
+      ) |>
+      mutate(
+        fillvar = ifelse(fillvar == "p_memb", "yes", "no"),
+        fillvar = factor(fillvar, levels = c("no", "yes")))
+    
+    gg <- ggplot(
+      .data,
+      aes(
+        x = .data$survyear,
+        y = .data$p_memb,
+        fill = .data$fillvar
+      )
+    ) +
+      geom_col() +
+      geom_hline(yintercept = 0, color = "#d8d8d8") +
+      geom_bar_text(
+        data = filter(.data, fillvar == "yes"),
+        formatter = percent_format(accuracy = .1),
+        fontface = "bold",
+        outside = TRUE,
+        contrast = TRUE,
+        size = 15,
+        min.size = 10
+      ) +
+      scale_y_continuous(labels = percent_format(accuracy = 1L)) +
+      scale_fill_manual(values = pal, na.value = "#DADDEF") +
+      theme_rr_dash() +
+      theme(panel.grid = element_blank()) +
+      labs(x = NULL, y = NULL)
+    
+    ##### FOR COUNTS
+  } else if (input$gg_measure == "Count") {
+    gg <- ggplot(.data,
+                 aes(
+                   x = .data$survyear,
+                   y = .data$n_v,
+                   fill = .data$cowmain_rc,
+                 )) +
+      geom_col() +
+      geom_hline(yintercept = 0, color = "#d8d8d8", linewidth = 1.45) +
+      geom_bar_text(
+        formatter = number_format(accuracy = 1L, scale_cut = cut_short_scale()),
+        fontface = "bold",
+        outside = TRUE,
+        contrast = TRUE,
+        size = 15,
+        min.size = 10
+      ) +
+      scale_y_continuous(expand = expansion(mult = c(0,.1))) +
+      scale_fill_manual(values = c(`Public sector` = dashpal[1], `Private sector` = dashpal[2])) +
+      theme_rr_dash() +
+      theme(panel.grid = element_blank(), axis.text.y = element_blank(),
+            panel.background = element_rect(fill = '#fafafa', colour = '#d9d9d9')) +
+      labs(x = NULL, y = NULL)
+  }
+  
+  ##### VERTICAL LAYOUT
+  if (input$gg_layout == "Vertical") {
+    gg +
+      scale_x_continuous(
+        expand = c(0.05, 0.05),
+        breaks = seq(2006, 2024, by = 3),
+        guide = guide_axis(check.overlap = TRUE)
+      ) +
+      theme(axis.text.y = element_blank(),
+            panel.spacing.y = unit(15, "pt")) +
+      facet_wrap(vars(varlevel),
+                 ncol = 1,
+                 dir = "v",
+                 axes = "all_x") 
+    
+    ##### HORIZONTAL LAYOUT
+  } else if (input$gg_layout == "Horizontal") {
+    gg + scale_x_continuous(
+      expand = c(0.05, 0.05),
+      breaks = seq(2006, 2024, by = 3),
+      guide = guide_axis(check.overlap = TRUE)
+    ) +
+      facet_wrap(
+        vars(fct_reorder(varlevel, p_memb, na.rm = TRUE)),
+        nrow = num_rows(),
+        dir = "h",
+        axes = "all_x",
+        drop = TRUE,
+        labeller = label_wrap_gen(width = 30)
+      ) +
+      theme(panel.spacing.x = unit(10, "pt"),
+            panel.spacing.y = unit(15, "pt"),
+            strip.clip = "on")
+  }
+}
+
+# Bar chart patchwork by sector function
+union_bars_patch <- function(df, pal) {
+  
+  facet_blank <- function(str) {str_replace_all(str, ".", "")}
+  
+  subtitle <- case_when(
+    input$gg_measure == "Proportion" ~ "Share of union members in group",
+    input$gg_measure == "Count" ~ "Number of union members"
+  )
+  
+  ggs <- group_by(df, cowmain_rc) |> 
+    group_split() |> 
+    map2(pal, \(x,y) union_bars_gg(x, y))
+  
+  ggs[[1]] <- ggs[[1]] + 
+    ggtitle("PRIVATE SECTOR", subtitle = subtitle) +
+    theme(plot.title = element_text(color = dashpal[2]))
+  
+  ggs[[2]] <- ggs[[2]] + 
+    ggtitle("PUBLIC SECTOR", subtitle = subtitle) +
+    theme(plot.title = element_text(color = dashpal[1]))
+  
+  if(input$gg_layout == "Vertical") {
+    ggs[[1]] + ggs[[2]]
+  } else if (input$gg_layout == "Horizontal") {
+    ggs[[1]] / ggs[[2]]
+  }
+}
+
+# Render bar charts
+output$plot_pop <- renderPlot({
+  p <- union_bars_patch(dataset_pop(), bar_pal)
+  return(p)
+}
+, height = n_facets
+)
+
+##### Kable table
+# Prepare wide format data
+kb_prep <- function(df) {
+  
+  variable <- df |> distinct(variable) |> pull(variable) |> as.character()
+  
+  if (input$tab_measure == "Density") {
+    df <- df |>
+      select(survyear, cowmain_rc, varlevel, value = p_v) |> 
+      pivot_wider(
+        id_cols = c(survyear, cowmain_rc),
+        names_from = varlevel,
+        values_fn = \(x) cell_spec(formattable::percent(x, digits = 1))
+      ) 
+    
+  } else if (input$tab_measure == "Proportion") {
+    df <- df |>
+      select(survyear, cowmain_rc, varlevel, value = p_memb) |> 
+      pivot_wider(
+        id_cols = c(survyear, cowmain_rc),
+        names_from = varlevel,
+        values_fn = \(x) cell_spec(formattable::percent(x, digits = 1))
+      ) 
+  }
+  
+  else if (input$tab_measure == "Count") {
+    df <- df |>
+      select(survyear, cowmain_rc, varlevel, value = n_v) |> 
+      pivot_wider(
+        id_cols = c(survyear, cowmain_rc),
+        names_from = varlevel,
+        values_fn = \(x) cell_spec(formattable::comma(x/1000, digits = 0)) 
+      ) 
+  }
+  
+  df |> 
+    arrange(cowmain_rc)
+  
+}
+
+# Create reactive data set
+kbl_df <- reactive({kb_prep(dataset_pop())})
+
+# Table function
+union_kbl <- function(df) {
+
+kb_rows <- df |> 
+  rownames_to_column() |> 
+  group_by(cowmain_rc) |> 
+  summarise(rowfirst = first(rowname), rowlast = last(rowname))
+
+kb_align <- c("l", rep("r", ncol(df)-1))
+
+list(kb_rows, kb_align)
+
+df |> 
+  ungroup() |> 
+  select(-cowmain_rc) |> 
+  rename(Year = survyear) |> 
+  kbl(format = "html", escape = FALSE, align = kb_align) |> 
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "responsive"),
+    font_size = 16,
+    repeat_header_continued = TRUE,
+    fixed_thead = TRUE) |> 
+  pack_rows("Private sector",
+            kb_rows[kb_rows$cowmain_rc=="Private sector",]$rowfirst,
+            kb_rows[kb_rows$cowmain_rc=="Private sector",]$rowlast,
+            label_row_css = "border-bottom: 1px solid;background-color:#6F8FCF;color:#fff") |> 
+  pack_rows("Public sector",
+            kb_rows[kb_rows$cowmain_rc=="Public sector",]$rowfirst,
+            kb_rows[kb_rows$cowmain_rc=="Public sector",]$rowlast,
+            label_row_css = "border-bottom: 1px solid;background-color:#8f1f3f;color:#fff") 
+
+}
+
+# Create table
+output$table <- reactive({union_kbl(kbl_df())})
+
+##### Data
 output$data <- renderTable({
   dataset()
 })
