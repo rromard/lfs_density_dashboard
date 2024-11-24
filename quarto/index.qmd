@@ -9,6 +9,8 @@ format:
       - sandstone
       - lfs_dash_style.css
 server: shiny
+tbl-cap-location: top
+cap-location: top
 execute:
   echo: false
   warning: false
@@ -393,7 +395,7 @@ plotOutput('plot_pop', height = "100%", width = "100%")
 
 ```{r}
 selectInput("variable", label = "Select variable", choices = dash_vars)
-selectInput("tab_measure", label = "Select variable", choices = c("Density", "Proportion", "Count"))
+selectInput("tab_measure", label = "Measure", choices = c("Density", "Demographics (%)", "Demographics (N)"))
 ```
 
 ## Content
@@ -401,9 +403,8 @@ selectInput("tab_measure", label = "Select variable", choices = c("Density", "Pr
 ```{r}
 #| fill: false
 #| flow: false
-#| dev: "svg"
-#| class: tab
-uiOutput('table', inline = TRUE, fill = TRUE)
+htmlOutput('table_title')
+tableOutput('table')
 ```
 
 ```{r}
@@ -579,9 +580,10 @@ output$plot_dens <- renderPlot({
 ## Subset reactive dataset to union members only
 ## Calculate the demographic proportions of union members + bar chart backdrop
 dataset_pop <- reactive({
+  req(input$variable)
   df <- pop_df[pop_df$variable == input$variable, ] |>
     mutate(varlevel = factor(varlevel, levels = flevels())) |>
-    group_by(survyear, cowmain_rc) |>
+    group_by(survyear, variable, var_orig, cowmain_rc) |>
     mutate(
       p_memb = n_v / sum(n_v),
       p_memb_bd = 1 - p_memb,
@@ -592,7 +594,7 @@ dataset_pop <- reactive({
 # Calculate population totals per variable level
 pop_totals <- reactive({dataset_pop() |> 
   filter(survyear==2024) |> 
-  group_by(survyear, varlevel) |> 
+  group_by(survyear, var_orig, varlevel) |> 
   reframe(n_v = sum(n_v), p_memb = sum(p_memb)) |> 
   arrange(-n_v)
 })
@@ -818,8 +820,19 @@ kb_prep <- function(df) {
 kbl_df <- reactive({
   if (input$tab_measure == "Density") {
     kb_prep(dataset())
-  } else if (input$tab_measure %in% c("Proportion", "Count")) {
+  } else if (input$tab_measure %in% c("Demographics (%)", "Demographics (N)")) {
     kb_prep(dataset_pop())
+  }
+})
+
+# Table titles
+kb_title <- reactive({
+  if (input$tab_measure == "Density") {
+    "<span style='font-size:18px'><b>Union density (% of group that are Union members)</b></span>"
+  } else if (input$tab_measure == "Demographics (%)") {
+    "<span style='font-size:18px'><b>Union member demographics (% of members that belong to group)</b></span>"
+  } else if (input$tab_measure == "Demographics (N)") {
+    "<span style='font-size:18px'><b>Number of union members in thousands</b></span>"
   }
 })
 
@@ -832,8 +845,6 @@ kb_rows <- df |>
   summarise(rowfirst = first(rowname), rowlast = last(rowname))
 
 kb_align <- c("l", rep("r", ncol(df)-1))
-
-list(kb_rows, kb_align)
 
 df |> 
   ungroup() |> 
@@ -852,9 +863,12 @@ df |>
             kb_rows[kb_rows$cowmain_rc=="Public sector",]$rowfirst,
             kb_rows[kb_rows$cowmain_rc=="Public sector",]$rowlast,
             label_row_css = "border-bottom: 1px solid;background-color:#8f1f3f;color:#fff") |> 
-  scroll_box(width = "100%", height = "700px", fixed_thead = T)
+  scroll_box(width = "100%", height = "500px", fixed_thead = T)
 
 }
+
+# Create title output
+output$table_title <- renderText({kb_title()})
 
 # Create table
 output$table <- reactive({union_kbl(kbl_df())})
