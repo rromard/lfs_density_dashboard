@@ -1,11 +1,11 @@
 /*-- scss:rules --*/
 
 selectize-input {
-  width: max-content !important;
+  min-width: 100px !important;
   max-width: 200px;
 }
 
 selectize-dropdown {
-  width: max-content !important;
+  min-width: 100px !important;
   max-width: 200px;
 }

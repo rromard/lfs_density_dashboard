@@ -118,7 +118,7 @@ lfs_variable_recode <- function(df) {
                             "Graduate"
       ),
       
-      # # Family type, collapse to more usable levels
+      ## Family type, collapse to more usable levels
       fam_rc = case_when(
         str_detect(efamtype, "Dual-earner") ~ "Dual-earner",
         str_detect(efamtype, "Lone-parent") ~ "Lone-parent",
@@ -128,6 +128,7 @@ lfs_variable_recode <- function(df) {
         efamtype == "Person not in an economic family" ~ "Not in econ family",
         .default = as.character(efamtype)
       ),
+      
       ## Set factor levels
       fam_rc = factor(
         fam_rc,
@@ -152,13 +153,21 @@ lfs_variable_recode <- function(df) {
         ),
         "no_children" = "Not applicable"
       ),
+      
+      # Recode not applicable to no children
+      agyownk = fct_recode(agyownk, "No children" = "Not applicable"),
+      
       # Job tenure, categories from https://www150.statcan.gc.ca/n1/pub/14-28-0001/2024001/article/00007-eng.htm
       tenure_rc = cut(
         tenure,
         c(1, 12, 60, 120, Inf),
         right = FALSE,
         include.lowest = TRUE
-      )
+      ),
+      
+      # Set some factor levels to NA
+      across(c("naics_21", "noc_10", "ftptmain", "permtemp","firmsize", "estsize", "schooln"),
+             \(x) fct_na_level_to_value(x, "Not applicable"))
     ) |> as_tibble()
 }
 
@@ -177,11 +186,13 @@ qread(infile) |>
 }
 
 # Frequencies, proportions, summary statistics
+## Counts
 lfs_summarise <- function(.df, ...) {
   .df %>%
     count(..., wt = finalwt)
 }
 
+## Proportions
 lfs_prop <- function(.df, ...) {
   .df %>%
     group_by(...) |> 
@@ -190,33 +201,200 @@ lfs_prop <- function(.df, ...) {
     )
 }
 
-lfs_valid_p <- function(.df, x, level, ...) {
-  
-  .df |> 
-    mutate( 
-      # Calculate valid percent, excluding missing factor levels using helper column
-      n_v = ifelse({{x}}==level | cowmain_rc == "Self-employed", NA, n),
-      n_v = ifelse(
-        varlevel == "Not applicable" & variable %in% c("naics_21", "noc_10", "ftptmain", "permtemp"),
-        NA, n_v
-      )
-    ) |> 
-    group_by(...) |> 
-    mutate(
-      p_v = n_v / sum(n_v, na.rm = TRUE)
-    ) |> ungroup()
+lfs_freq_prop <- function(df, .params) {
+  map(
+    .params,
+    \(x)
+    df |>
+      filter(
+        lfsstat %in% c("Employed, at work", "Employed, absent from work"),
+        !cowmain_rc %in% c("Not applicable","Self-employed"),
+        union_bin != "Not applicable") |> 
+    lfs_summarise(survyear, survmnth, "varlevel" := get(x), cowmain_rc, union_bin) |>
+    lfs_prop(survyear, survmnth, varlevel, cowmain_rc)
+  ) |>
+    set_names(nm = lfs_params) |>
+    map(as_tibble) |>
+    bind_rows(.id = "variable")
 }
 
-lfs_freq_prop <- function(df, .params) { 
-  map(.params, \(x)
-    df |> 
-        lfs_summarise(ref_date, "varlevel" := get(x), cowmain_rc, union_bin) |> 
-        lfs_prop(ref_date, varlevel, cowmain_rc)
+# Dashboard data prep
+
+dash_base_data_prep <- function(df) {
+
+df |>
+  filter(
+    varlevel != "Non-earner",
+    varlevel != "Agriculture"
+  ) |>
+  select(survyear, survmnth, variable, varlevel, cowmain_rc, union_bin, n, p) |>
+  mutate(
+    var_orig = variable,
+    var_orig = case_when(
+      var_orig == "nse" ~ "Standard/Non-standard employment",
+      var_orig == "ftptmain" ~ "Full-time/Part-time", 
+      var_orig == "permtemp" ~ "Permament/Temporary", 
+      var_orig == "mjh" ~ "Single/Multi-job holder",
+      .default = as.character(var_orig)
+    ),
+    # Variable names to final labels
+    variable = case_when(
+      variable %in% c("nse", "ftptmain", "permtemp", "mjh") ~ "Employment status",
+      variable == "prov" ~ "Province",
+      variable == "cma" ~ "CMA",
+      variable == "age_group" ~ "Age group",
+      variable == "sex" ~ "Gender",
+      variable == "educ_rc" ~ "Education level",
+      variable == "schooln" ~ "Student status",
+      variable == "fam_rc" ~ "Family type",
+      variable == "agyownk" ~ "Youngest child",
+      variable == "immig" ~ "Immigration",
+      variable == "naics_21" ~ "Industry",
+      variable == "noc_10" ~ "Occupation",
+      variable == "tenure_rc" ~ "Job tenure",
+      variable == "estsize" ~ "Establishment size",
+      variable == "firmsize" ~ "Firm size"
+    ),
+    union_bin = fct_rev(union_bin),
+    cowmain_rc = fct_relabel(cowmain_rc, \(x) str_remove(x, " employees")),
+    cowmain_rc = fct_rev(cowmain_rc),
+    
+    # Setting some industry level variables to missing manually
+    p = case_when(
+      variable == "Industry" &
+        cowmain_rc == "Public sector" &
+        varlevel %in% c(
+          "Agriculture",
+          "Accommodation and food services",
+          "Fishing, hunting and trapping",
+          "Forestry and logging and support activities for forestry",
+          "Manufacturing - durable goods",
+          "Manufacturing - non-durable goods",
+          "Mining, quarrying, and oil and gas extraction",
+          "Other services (except public administration)",
+          "Wholesale trade"
+        ) ~ NA,
+      variable == "Industry" &
+        cowmain_rc == "Private sector" &
+        varlevel == "Public administration" ~ NA,
+      .default = p
+    ),
+    
+    # Setting some factor levels to NA
+    
+    # Recoding some factor levels to be more compact
+    varlevel = case_when(
+      
+      # Province
+      varlevel == "Newfoundland and Labrador" ~ "Newfoundland",
+      varlevel == "Prince Edward Island" ~ "PEI",
+      
+      # CMA
+      varlevel == "Other CMA or non-CMA" ~ "Other CMA/non-CMA",
+      varlevel == "Ottawa–Gatineau (Ontario part)" ~ "Ottawa–Gatineau",
+      
+      # Gender
+      varlevel == "Male" ~ "Men",
+      varlevel == "Female" ~ "Women",
+      
+      # Employment
+      varlevel == "Single jobholder, including job changers" ~ "Single jobholder",
+      varlevel == "Temporary, casual or other temporary jobs" ~ "Temporary, casual",
+      varlevel == "Temporary, seasonal job" ~ "Temporary, seasonal",
+      varlevel == "Temporary, term or contract job" ~ "Temporary, term/contract",
+      
+      varlevel == "Immigrant, landed 10 or less years earlier" ~ "Immigrant < 10 years",
+      varlevel == "Immigrant, landed more than 10 years earlier" ~ "Immigrant > 10 years",
+      
+      # Youngest child
+      varlevel == "Youngest child less than 6 years" ~ "Under 6 years",
+      varlevel == "Youngest child 6 to 12 years" ~ "6-12 years",
+      varlevel == "Youngest child 13 to 17 years" ~ "13-17 years",
+      varlevel == "Youngest child 18 to 24 years" ~ "18-24 years",
+      
+      # Job tenure
+      varlevel ==  "[1,12)" ~ "Under 1 year",
+      varlevel ==  "[12,60)" ~ "1 to under 5",
+      varlevel ==  "[60,120)" ~ "5 to under 10",
+      varlevel ==  "[120,Inf]" ~ "10 years or more",
+      
+      # Industry
+      varlevel == "Accommodation and food services" ~ "Accomodation/Food",
+      varlevel == "Business, building and other support services" ~ "Business/Building/Other services",
+      varlevel == "Educational services" ~ "Education",
+      varlevel == "Finance and insurance" ~ "Finance/Insurance",
+      varlevel == "Fishing, hunting and trapping" ~ "Fishing/Hunting/Trapping",
+      varlevel == "Forestry and logging and support activities for forestry" ~ "Forestry/Support activities",
+      varlevel == "Health care and social assistance" ~ "Health care/Social assistance",
+      varlevel == "Information, culture and recreation" ~ "Information/Culture/Recreation",
+      varlevel == "Manufacturing - durable goods" ~ "Manufacturing, durable",
+      varlevel == "Manufacturing - non-durable goods" ~ "Manufacturing, non-durable",
+      varlevel == "Mining, quarrying, and oil and gas extraction" ~ "Mining/Quarrying/Oil and gas",
+      varlevel == "Other services (except public administration)" ~ "Other services",
+      varlevel == "Professional, scientific and technical services" ~ "Professional/Scientific/Technical",
+      varlevel == "Real estate and rental and leasing" ~ "Real estate/Rental/Leasing",
+      varlevel == "Transportation and warehousing" ~ "Transportation/Warehousing",
+      
+      # Occupation
+      varlevel == "Business, finance and administration occupations, except management" ~ 
+        "Business/Finance/Admin",
+      varlevel == "Health occupations, except management" ~ "Health",
+      varlevel == "Management occupations" ~ "Management",
+      varlevel == "Natural and applied sciences and related occupations, except management" ~ "Natural/Applied sciences",
+      varlevel == "Natural resources, agriculture and related production occupations, except management" ~ "Natural resources/Agriculture/Related",
+      varlevel == "Occupations in art, culture, recreation and sport, except management" ~ "Art/Culture/Recreation/Sport",
+      varlevel == "Occupations in education, law and social, community and government services, except management" ~ 
+        "Education/Law/SCG services",
+      varlevel == "Occupations in manufacturing and utilities, except management" ~ "Manufacturing/Utilities",
+      varlevel == "Sales and service occupations, except management" ~ "Sales/Service",
+      varlevel == "Trades, transport and equipment operators and related occupations, except management" ~ "Trades/Transport/Equip operators",
+      .default = as.character(varlevel)
+    )
   ) |> 
-    set_names(nm = lfs_params) |> 
-    map(as_tibble) |> 
-    bind_rows(.id = "variable") |> 
-    lfs_valid_p(union_bin, level = "Not applicable", ref_date, varlevel, cowmain_rc)
+  relocate(var_orig, .before = variable)
 }
 
+# Summarize the summary data from monthly to yearly
+## Union density
+density_data_prep <- function(df) {
+  df |> 
+  group_by(survyear, variable, varlevel, cowmain_rc, union_bin) |>
+  summarise(p = mean(p, na.rm = TRUE),
+            n = mean(n, na.rm = TRUE)) |>
+  ungroup() |> 
+  group_by(survyear, variable, varlevel) |> 
+  mutate(p_pop = n / sum(n),
+         unioncow = case_when(
+           cowmain_rc == "Private sector" & union_bin == "Union member" ~ "Private (Unionized)",
+           cowmain_rc == "Public sector" & union_bin == "Union member" ~ "Public (Unionized)",
+           cowmain_rc == "Private sector" & union_bin == "Not member"  ~ "Private (No union)",
+           cowmain_rc == "Public sector" & union_bin == "Not member"  ~ "Public (No union)",
+         ),
+         unioncow = factor(unioncow, 
+                           levels = c('Public (Unionized)',
+                                      'Private (Unionized)', 
+                                      'Private (No union)', 
+                                      'Public (No union)'))) |> 
+  ungroup()
+}
+
+## Distribution of members
+dist_data_prep <- function(df) {
+  
+  var_key <- df |> distinct(var_orig, variable)
+  
+  df |> 
+  filter(union_bin == "Union member") |> 
+  group_by(survyear, var_orig, varlevel, cowmain_rc) |>
+  summarise(n = mean(n, na.rm = TRUE)) |>
+  ungroup() |> 
+  group_by(survyear, var_orig, cowmain_rc) |> 
+  mutate(
+    p_memb = n / sum(n),
+    p_memb_bd = 1 - p_memb,
+    cowmain_rc = as_factor(as.character(cowmain_rc))) |> 
+  left_join(var_key) |> 
+  relocate(variable, .after = var_orig) |> 
+  ungroup()
+}
 
