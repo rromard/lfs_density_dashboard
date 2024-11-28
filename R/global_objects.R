@@ -11,5 +11,5 @@ lfs_wages_hrs_vars = c("utothrs","hrlyearn","xtrahrs")
 lfs_cols <- c(lfs_default_vars, lfs_demo_vars, lfs_emp_vars, lfs_wages_hrs_vars)
 
 # Parameters for frequencies and proportions
-lfs_params <- c("prov","cma","age_12","sex","educ_rc","fam_rc","agyownk","immig",
-                "mjh","ftptmain","permtemp","nse","naics_21","noc_10","tenure_rc") |> map(sym)
+lfs_params <- c("prov","cma","age_group","sex","educ_rc","schooln","fam_rc","agyownk","immig",
+                "mjh","ftptmain","permtemp","nse","naics_21","noc_10","estsize","firmsize","tenure_rc") |> map(sym)
