@@ -225,7 +225,6 @@ dash_base_data_prep <- function(df) {
 df |>
   filter(
     varlevel != "Non-earner",
-    varlevel != "Agriculture"
   ) |>
   select(survyear, survmnth, variable, varlevel, cowmain_rc, union_bin, n, p) |>
   mutate(
@@ -264,7 +263,6 @@ df |>
       variable == "Industry" &
         cowmain_rc == "Public sector" &
         varlevel %in% c(
-          "Agriculture",
           "Accommodation and food services",
           "Fishing, hunting and trapping",
           "Forestry and logging and support activities for forestry",

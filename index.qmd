@@ -1,0 +1,1276 @@
+---
+title: "A Data Portrait of Canadian Unions"
+author: "Ryan Romard"
+editor: visual
+format: 
+  dashboard:
+    scrolling: false
+    theme: 
+      - sandstone
+      - lfs_dash_style.css
+server: shiny
+tbl-cap-location: top
+cap-location: top
+execute:
+  echo: false
+  warning: false
+---
+
+```{r}
+#| context: setup
+# Libraries, fonts themes
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dev = "svg")
+xfun::pkg_attach("tidyverse", "targets", "here", "scales", "qs", "zoo", "patchwork", "shiny", "shinyjs", "rlang", "ggrepel", "ggtext", "ggfittext", "kableExtra", "glue", "targets")
+
+dashpal <-  c("#771155", "#117777")
+rpal <- c("#771155", "#AA4488", "#CC99BB", 
+          "#114477", "#4477AA", "#77AADD", 
+          "#117777", "#44AAAA", "#77CCCC", 
+          "#117744", "#44AA77", "#88CCAA", 
+          "#777711", "#AAAA44", "#DDDD77", 
+          "#774411", "#AA7744", "#DDAA77", 
+          "#771122", "#AA4455", "#DD7788")
+
+dens_pal <- list(c(`Union member` = dashpal[2], `Not member` = "#DADDEF"),
+                      c(`Union member` = dashpal[1], `Not member` = "#DADDEF"))
+bar_pal <- list(
+  c(`yes` = dashpal[2], `no` = "#DADDEF"),  # private
+  c(`yes` = dashpal[1], `no` = "#DADDEF")  # public
+)
+
+theme_rr_dash <-
+  function(base_size = 14, legend = 'none') {
+    theme_minimal() %+replace%
+      theme(
+        text = element_text(size = 6),
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 16),
+        axis.title = element_text(size = 14),
+        plot.title = element_text(
+          size = 20,
+          hjust = 0,
+          face = 'bold',
+          margin = margin(b = 6)
+        ),
+        plot.subtitle = element_text(
+          size = 18,
+          hjust = 0,
+          margin = margin(b = 10)
+        ),
+        plot.title.position = 'plot',
+        plot.caption = element_text(
+          size = 12,
+          face = 'italic',
+          hjust = 1,
+          margin = margin(t = 10)
+        ),
+        panel.grid.minor = element_blank(),
+        legend.position = legend,
+        strip.text = element_text(
+          size = 18,
+          face = "bold",
+          color = "#353935",
+          hjust = 0,
+          margin = margin(b = 5, unit = "mm")
+        )
+      )
+  }
+```
+
+```{r}
+#| context: data
+#| include: false
+
+# Data import and prep
+## Density data
+dens_df <- tar_read(density_df) |> 
+  mutate(p = ifelse(is.nan(p), NA, p))
+
+## Distribution data
+pop_df <- tar_read(dist_df)
+
+# Dataframe full of default factor levels
+factor_levels <-
+  tribble(
+    ~ varlevel,
+    ~ variable,
+    
+    # Age groups
+    "65+","Age group",
+    "55 to 64","Age group",
+    "25 to 54","Age group",
+    "15 to 24","Age group",
+    
+    # CMA
+    "Calgary","CMA",
+    "Edmonton","CMA",
+    "Hamilton","CMA",
+    "Montréal","CMA",
+    "Ottawa–Gatineau","CMA",
+    "Québec","CMA",
+    "Toronto","CMA",
+    "Vancouver","CMA",
+    "Winnipeg","CMA",
+    "Other CMA/non-CMA","CMA",
+    
+    # Province
+    "Alberta","Province",
+    "British Columbia","Province",
+    "Manitoba","Province",
+    "New Brunswick","Province",
+    "Newfoundland","Province",
+    "Nova Scotia","Province",
+    "Ontario","Province",
+    "PEI","Province",
+    "Quebec","Province",
+    "Saskatchewan","Province",
+    
+    # Education
+    "Graduate","Education level",
+    "Undergraduate","Education level",
+    "College","Education level",
+    "Secondary/Some PSE","Education level",
+    "Under secondary","Education level",
+    
+    # Student status
+    "Part-time student","Student status",
+    "Full-time student","Student status",
+    "Non-student","Student status",
+    
+    # Family type
+    "Other families","Family type",
+    "Lone-parent","Family type",
+    "Not in econ family","Family type",
+    "Single-earner","Family type",
+    "Dual-earner","Family type",
+    
+    # Gender
+    "Men","Gender",
+    "Women","Gender",
+    
+    # Immigration
+    "Immigrant < 10 years","Immigration",
+    "Immigrant > 10 years","Immigration",
+    "Non-immigrant","Immigration",
+    
+    # Employment
+    "Standard employment","Employment status",
+    "Non-standard employment","Employment status",
+    "Full-time","Employment status",
+    "Part-time","Employment status",
+    "Multiple jobholder","Employment status",
+    "Single jobholder","Employment status",
+    "Permanent","Employment status",
+    "Temporary, casual","Employment status",
+    "Temporary, seasonal","Employment status",
+    "Temporary, term/contract","Employment status",
+    
+    # Job tenure
+    "10 years or more","Job tenure",
+    "5 to under 10","Job tenure",
+    "1 to under 5","Job tenure",
+    "Under 1 year","Job tenure",
+    
+    # Industry
+    "Accomodation/Food","Industry",
+    "Agriculture","Industry",
+    "Business/Building/Other services","Industry",
+    "Construction","Industry",
+    "Education","Industry",
+    "Finance/Insurance","Industry",
+    "Fishing/Hunting/Trapping","Industry",
+    "Forestry/Support activities","Industry",
+    "Health care/Social assistance","Industry",
+    "Information/Culture/Recreation","Industry",
+    "Manufacturing, durable","Industry",
+    "Manufacturing, non-durable","Industry",
+    "Mining/Quarrying/Oil and gas","Industry",
+    "Other services","Industry",
+    "Professional/Scientific/Technical","Industry",
+    "Public administration","Industry",
+    "Real estate/Rental/Leasing","Industry",
+    "Retail trade","Industry",
+    "Transportation/Warehousing","Industry",
+    "Utilities","Industry",
+    "Wholesale trade","Industry",
+    
+    # Firm size
+    "More than 500 employees", "Firm size",
+    "100 to 500 employees","Firm size",
+    "20 to 99 employees","Firm size",
+    "Less than 20 employees","Firm size",
+    
+    # Est size
+    "More than 500 employees","Establishment size",
+    "100 to 500 employees","Establishment size",
+    "20 to 99 employees","Establishment size",
+    "Less than 20 employees","Establishment size",
+    
+    # Occupation
+    "Business/Finance/Admin","Occupation",
+    "Health","Occupation",
+    "Management","Occupation",
+    "Natural/Applied sciences","Occupation",
+    "Natural resources/Agriculture/Related","Occupation",
+    "Art/Culture/Recreation/Sport","Occupation",
+    "Education/Law/SCG services","Occupation",
+    "Manufacturing/Utilities","Occupation",
+    "Sales/Service","Occupation",
+    "Trades/Transport/Equip operators","Occupation",
+
+    # Youngest child
+    "18-24 years","Youngest child",
+    "13-17 years","Youngest child",
+    "6-12 years","Youngest child",
+    "Under 6 years","Youngest child",
+    "No children","Youngest child"
+)
+
+# Pull main variables for selector list
+dash_vars <- dens_df |> distinct(variable) |> pull() |> as.character()
+
+# Set selector list order
+dash_vars_order <- c(
+  "Province",
+  "CMA",
+  "Age group",
+  "Gender",
+  "Family type",
+  "Youngest child",
+  "Education level",
+  "Student status",
+  "Immigration",
+  "Occupation",
+  "Industry",
+  "Establishment size",
+  "Firm size",
+  "Employment status",
+  "Job tenure")
+dash_vars <- dash_vars[order(match(dash_vars, dash_vars_order))]
+```
+
+#  {.toolbar}
+
+```{r}
+useShinyjs(rmd = TRUE)
+selectInput("variable", label = "Select variable", choices = dash_vars, selectize = FALSE)
+selectInput("gg_layout", label = 'Layout', choices = c("Vertical", "Horizontal", "Stacked"), selectize = FALSE)
+selectInput("measure", label = "Measure", choices = c("Union density", "Distribution (%)", "Distribution (N)"), selectize = FALSE)
+shinyjs::hidden(selectInput("ordering", 
+                            label = "Order", 
+                            choices = c("Default", "Descending"),
+                            selectize = FALSE
+                            )
+                )
+```
+
+# Home {scrolling="false"}
+
+[<b>A data portrait of Canadian unions</b>]{style="font-size:26px;"}
+
+**This dashboard** allows the user to visually explore open-access data on trade union membership in Canada. The data source is the [Labour Force Survey](https://www23.statcan.gc.ca/imdb-bmdi/pub/3701-eng.htm) published by Statistics Canada. Patterns in union density and the makeup of union membership can be observed across 16 different variables related to demographics, employment, and geography.
+
+-   **INFO -** tab to see more detailed information on the data source, variable definitions, measures and layouts.
+
+-   **CHARTS -** tab to view data visualizations. Use the top toolbar to select variables, change the measure type, or select another chart layout.
+
+-   **TABLE -** tab to view the chart data presented in tabular format for each sector.
+
+-   **DATA -** tab to download a .csv file containing the raw chart data.
+
+[<b>A brief history of union density in Canada</b>]{style="font-size:26px;"}
+
+-   **Grey zone:** Prior to 1872, it was illegal for workers to organize unions in Canada. Following the passage of the Trade Union Act that year, unions existed in a legal grey zone. Workers were no longer legally forbidden from creating unions, however, they had virtually no legal rights or protections in that area. Employers had no obligation to bargain with their employees, nor to even abide by the terms of an agreement were one to be rarely signed.
+
+-   **Post-war take-off:** Unions would exit the grey zone at end of World War Two, which was capped off by a [massive strike by Ford workers in Windsor in 1945](https://canadianlabour.ca/who-we-are/history/1945-windsors-ford-strike/). In the wake of that strike, a system of formalized and legally bound collective bargaining was created, along the lines of the [Wagner](https://www.nlrb.gov/about-nlrb/who-we-are/our-history/1935-passage-of-the-wagner-act) mode lof industrial relations adopted in the United States. A key legal ruling establishing what is known as [*the Rand Formula*](https://canadianlabour.ca/who-we-are/history/the-rand-decision-everyone-who-benefits-should-contribute/)established that all who benefit from a union contract should pay dues to the union. As a result, union membership and activity expanded greatly from 1940s to the mid 1960s.
+
+-   **Public sector bargaining:** While public sector workers could also form unions, they did not win the right to collective bargaining alongside their private sector counterparts. It was not until 1965 that public sector workers won the right to bargain - a victory won by an [illegal wildcat strike by postal workers](https://canadianlabour.ca/who-we-are/history/1965-public-service-workers-win-bargaining-rights/).
+
+-   **The long decline:** Union density hit a high point of 38% in 1986, which was a year of significant labour struggle. Throughout the neoliberal era, governments and employers alike have undermined unions and labour rights. Those attacks, along with structural changes in the global and national economy like off-shoring manufacturing jobs, caused a long-term decline in union density that has continued to this day.
+
+<br>
+
+::: {#datawrapper-vis-b2njK style="min-height:486px"}
+```{=html}
+<script type="text/javascript" defer src="https://datawrapper.dwcdn.net/b2njK/embed.js" charset="utf-8" data-target="#datawrapper-vis-b2njK"></script>
+```
+
+<noscript><img src="https://datawrapper.dwcdn.net/b2njK/full.png"/></noscript>
+:::
+
+<br>
+
+[<b>Why compare private and public sector?</b>]{style="font-size:26px;"}
+
+The data is categorized by employment sector, distinguishing private from public sector dynamics. This approach recognizes the significant differences in union density and membership trends between sectors, without framing them in opposition to one another.
+
+Unionization rates began high in the public sector and have slowly risen over time. In 1997, about 69% of public employees were unionized, growing to 73% by 2024. In the private sector, unionization rates have always much lower and have drastically diminished over time, falling from 19.3% in 1997 to just 13.5% in 2024.
+
+One reason for this difference is that most bargaining in the public sector takes place at the industry-level. For example, in most provinces, the majority public sector workers (e.g., teachers or nurses) across the province are members of the same union. Most private sector workers, by contract, work in small to medium sized firms that stand alone.
+
+Another reason is that public sector jobs cannot be off-shored in the same way private sector jobs can. Off-shoring manufacturing has caused employment to shift from more to less unionized industries, as manufacturing jobs are replaced with service industry jobs.
+
+<br>
+
+::: {#datawrapper-vis-gZmUd style="min-height:463px"}
+```{=html}
+<script type="text/javascript" defer src="https://datawrapper.dwcdn.net/gZmUd/embed.js" charset="utf-8" data-target="#datawrapper-vis-gZmUd"></script>
+```
+
+<noscript><img src="https://datawrapper.dwcdn.net/gZmUd/full.png"/></noscript>
+:::
+
+# Info {orientation="rows" scrolling="true"}
+
+## Row
+
+::: {.card title = "DATA SOURCE" fill="false"}
+
+-   **Source:** The source for all data beyond the home page is the [Labour Force Survey (LFS) Public Use Micro-data File (PUMF)](https://www150.statcan.gc.ca/n1/en/catalogue/71M0001X) published by Statistics Canada. For more information about the Labour Force Survey, please see the [official guide](https://www150.statcan.gc.ca/n1/pub/71-543-g/71-543-g2020001-eng.htm) produced by StatCan.
+
+-   **Years covered:** 2006 to current (2024)
+
+-   **Estimates:** Public use microdata files have been altered by StatCan to protect the privacy of respondents, so that they might be released as open-access data. Accordingly, estimates produced with a PUMF may vary slightly from officially published data produced by StatCan. The estimated values are provided as-is without any indicators of estimate quality, such as a coefficient of variation (cv) or confidence intervals.
+
+-   **Population:** Only the **workforce of paid employees** either in the public or private sector are included in this report. That means people that are not in the labour force, unemployed, self-employed or unpaid family workers are not included in counts and proportions.
+
+-   **Exclusions:** Some parts of the population are excluded from the LFS itself, including people living on reserves, full-time military personnel and institutionalized/incarcerated peoples.
+
+-   **Updates:** Data is refreshed on a monthly basis with a one month lag, following the PUMF release schedule.
+
+:::
+
+## Row
+
+::: {.card title="VARIABLES" fill="false"}
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Variable           | Notes - [Source: Guide to the Labour Force](https://www150.statcan.gc.ca/n1/pub/71-543-g/71-543-g2020001-eng.htm)                                                                                                                                                                                      |
++====================+========================================================================================================================================================================================================================================================================================================+
+| Sector             | -   Does the employee work in the public or private sector?                                                                                                                                                                                                                                            |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   The **public sector** includes employees in federal, provincial, territorial, municipal and Aboriginal public administrations, as well as in Crown corporations, liquor control boards and other government institutions such as schools (including universities), hospitals and public libraries. |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   The **private sector** comprises all other employees that are not in the public sector, including paid employees, as well as self-employed people and unpaid family workers (not included in this report).                                                                                         |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Province           | -   Province of residence at time of survey                                                                                                                                                                                                                                                            |
+|                    | -   Territories are not included in the LFS data                                                                                                                                                                                                                                                       |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| CMA                | -   [Census Metropolitan Area](https://www150.statcan.gc.ca/n1/pub/92-195-x/2021001/geo/cma-rmr/cma-rmr-eng.htm) of residence at time of survey                                                                                                                                                        |
+|                    | -   Includes the 9 largest CMAs vs. All other CMAs/Non-CMA areas                                                                                                                                                                                                                                       |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Age group          | -   Age of respondent (4 groups)                                                                                                                                                                                                                                                                       |
+|                    | -   Data is collected from people ages 15 and up                                                                                                                                                                                                                                                       |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Gender             | -   Gender of respondent                                                                                                                                                                                                                                                                               |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Data on more diverse gender identities isn't available at this time                                                                                                                                                                                                                                |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Family type        | -   Family type of respondent                                                                                                                                                                                                                                                                          |
+|                    | -   The LFS uses the [economic family concept](https://www23.statcan.gc.ca/imdb/p3Var.pl?Function=Unit&Id=33863) to categorize family arrangements                                                                                                                                                     |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Youngest child     | -   Age of respondent's youngest child (if any) in years, 1-24 years old                                                                                                                                                                                                                               |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Education level    | -   Highest education level attained by respondent                                                                                                                                                                                                                                                     |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Student status     | -   Student Status of respondent                                                                                                                                                                                                                                                                       |
+|                    | -   Whether the respondent is attending an educational program during the reference week, regardless of the level of that program                                                                                                                                                                      |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Immigration        | -   Whether the respondent was born in Canada or immigrated to Canada                                                                                                                                                                                                                                  |
+|                    | -   People that have been landed immigrants or permanent residents of Canada are counted as immigrants, regardless of citizenship status                                                                                                                                                               |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Occupation         | -   Occupation of respondent                                                                                                                                                                                                                                                                           |
+|                    | -   Based on type of work performed by respondent during the reference week                                                                                                                                                                                                                            |
+|                    | -   10 categories based on the National Occupational Classification System ([NOCS](https://noc.esdc.gc.ca/)) 2021 version                                                                                                                                                                              |
+|                    | -   *Note*: some series are missing entirely, as there are too few of certain occupation types in a sector to produce usable values (*e.g.* public administration workers in the private sector)                                                                                                       |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Industry           | -   Industry of employment of respondent                                                                                                                                                                                                                                                               |
+|                    | -   Based on general nature of business carried out in the establishment of work                                                                                                                                                                                                                       |
+|                    | -   21 categories based on the National Industry Classification System ([NAICS](https://www23.statcan.gc.ca/imdb/p3VD.pl?Function=getVD&TVD=1181553)) 2021 version                                                                                                                                     |
+|                    | -   *Note*: some series are missing entirely, as there is too little employment in an industry to produce usable values (*e.g.* manufacturing employment the public sector)                                                                                                                            |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Establishment size | -   Size of the establishment the respondent works in                                                                                                                                                                                                                                                  |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Establishment size refers to the number employees at the location of employment (*e.g.* a building or compound)                                                                                                                                                                                    |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Firm size          | -   Size of the firm the respondent works in.                                                                                                                                                                                                                                                          |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Firm size refers to the number of employees that work at all locations of a given business/organizational entity (*e.g.* a corporation or non-profit)                                                                                                                                              |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Employment size    | -   Employment status markers                                                                                                                                                                                                                                                                          |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Standard/Non-standard employment                                                                                                                                                                                                                                                                   |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   NSE: employees in any combination of the following, part-time, temporary, multiple-jobholders, precarious self-employed (not included)                                                                                                                                                         |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Standard: The absence of any of the NSE markers above.                                                                                                                                                                                                                                         |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   More information on [how NSE was categorized using method in source.](https://www.erudit.org/en/journals/ri/2022-v77-n1-ri06959/1088554ar/)                                                                                                                                                    |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Full-time/Part-time                                                                                                                                                                                                                                                                                |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Full time: usually works 30 hours per week at main/only job                                                                                                                                                                                                                                    |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Part-time: usually works under 30 hours at main/only job                                                                                                                                                                                                                                       |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Permanent/Temporary                                                                                                                                                                                                                                                                                |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Permanent: Expected to last as long as the employee wants it, business conditions permitting; no pre-determined contract end date.                                                                                                                                                             |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Temporary: Expected to end at a pre-determined date or after the completion of a particular project; seasonal, temporary, term-based or contract employees.                                                                                                                                    |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Single/Multiple job holders                                                                                                                                                                                                                                                                        |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Multiple job holders worked at two or more jobs during the reference week.                                                                                                                                                                                                                     |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Proportions add up to 100% for each sub-group by sector, counts add up to the total number of employees in each sub-group.                                                                                                                                                                         |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Job tenure         | -   Respondent's job tenure in years, under one to ten+ years                                                                                                                                                                                                                                          |
+|                    | -   Number of consecutive months or years respondent has worked for the same employer                                                                                                                                                                                                                  |
+|                    | -   [Source of tenure categories here](https://www150.statcan.gc.ca/n1/pub/14-28-0001/2024001/article/00007-eng.htm)                                                                                                                                                                                   |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+:::
+
+## Row
+
+::: {.card title="MEASURES AND LAYOUTS" fill="false"}
++------------------+----------------------------------------------------------------------------------------------+
+| Measure          | Notes                                                                                        |
++==================+==============================================================================================+
+| Union density    | -   The percentage of employees that are union members.                                      |
+|                  |                                                                                              |
+|                  | -   Includes paid employees only, so nobody reporting self-employment.                       |
++------------------+----------------------------------------------------------------------------------------------+
+| Distribution (%) | -   The percentage of union members that belong to a given group, province, occupation, etc. |
+|                  |                                                                                              |
+|                  | -   All groups add up to roughly 100%, may not be exact due to rounding.                     |
++------------------+----------------------------------------------------------------------------------------------+
+| Distribution (N) | -   The number of union members that belong to a given group, province, occupation, etc.     |
+|                  |                                                                                              |
+|                  | -   All groups adds up to the total number of union members.                                 |
++------------------+----------------------------------------------------------------------------------------------+
+
++------------+--------------------------------------------------------------------------------------------------------------------------------+
+| Layout     | Useful for                                                                                                                     |
++============+================================================================================================================================+
+| Vertical   | -   Making comparisons between the public and private sector by variable level.                                                |
+|            |                                                                                                                                |
+|            | -   *Ex:* Comparing union density over time in each province in the private sector versus the public sector.                   |
++------------+--------------------------------------------------------------------------------------------------------------------------------+
+| Horizontal | -   Making comparisons between variable levels within the public and private sectors.                                          |
+|            |                                                                                                                                |
+|            | -   *Ex:* Comparing the union density trend over time in the private sector from one education level to the next.              |
++------------+--------------------------------------------------------------------------------------------------------------------------------+
+| Stacked    | -   Seeing how the groups indicated by variable levels form parts of the whole in each sector.                                 |
+|            |                                                                                                                                |
+|            | -   *Ex:* Observing how the age composition of total union membership has changed over time in the private and public sectors. |
++------------+--------------------------------------------------------------------------------------------------------------------------------+
+:::
+
+# Charts
+
+## Content
+
+```{r}
+#| fill: false
+#| flow: true
+#| dev: "svg"
+plotOutput('plot', height = "100%", width = "100%")
+```
+
+# Table
+
+## Content
+
+```{r}
+#| fill: false
+#| flow: false
+htmlOutput('table_title')
+tableOutput('table')
+```
+
+# Data
+
+## Sidebar {.sidebar}
+
+Click the download button to retrieve a CSV (comma-separated value) file containing the chart data in long format.
+
+**Columns**
+
+Union density
+
+-   pop = number of paid employees
+
+-   p_in_union = % employees that are union members/not members by varlevel (Proportion)
+
+-   p_population = employees as a % of the total workforce by varlevel (Proportion)
+
+Distribution
+
+-   members = number of union members by varlevel
+
+-   p_members = % members that belong to varlevel (Proportion)
+
+```{r}
+downloadButton("data", "Download")
+```
+
+## Content {title = "Data preview"}
+
+```{r}
+tableOutput('data_preview')
+```
+
+```{r server_data}
+#| context: server
+
+##### Dynamic UI
+observe({
+    if (input$gg_layout == "Stacked" & 
+        input$measure %in% c(
+          "Distribution (%)", "Distribution (N)"
+        )) {
+      shinyjs::show("ordering")
+    } else {
+      shinyjs::hide("ordering")
+    }
+  })
+  
+##### DATA
+# Default factor levels
+flevels <- reactive({
+  req(input$variable)
+  factor_levels[factor_levels$variable == input$variable, ] |> 
+    pull(varlevel) |> as.character()
+})
+
+# Create union density data set, reactive
+dataset <- reactive({
+  req(input$variable)
+  df <- dens_df[dens_df$variable == input$variable, ] |> 
+    mutate(varlevel = factor(varlevel, levels = flevels()))
+})
+
+# Create demographic dataset, reactive
+dataset_pop <- reactive({
+  req(input$variable)
+  df <- pop_df[pop_df$variable == input$variable, ] |>
+    mutate(varlevel = factor(varlevel, levels = flevels())) |>
+    group_by(survyear, variable, var_orig, cowmain_rc) |>
+    mutate(
+      p_memb = n / sum(n),
+      # Calculate the bar/area backdrop
+      p_memb_bd = 1 - p_memb,
+      cowmain_rc = as_factor(as.character(cowmain_rc))
+      ) |> 
+    ungroup()
+})
+
+# Calculate population totals per variable level
+pop_totals <- reactive({dataset_pop() |> 
+  filter(survyear==2024) |> 
+  group_by(survyear, var_orig, varlevel) |> 
+  reframe(n = sum(n), p_memb = sum(p_memb)) |> 
+  arrange(-n)
+})
+
+# Create character vector for default factor ordering
+pop_levels <- reactive({pop_totals() |> 
+  pull(varlevel) |> 
+  as.character()
+})
+
+# Create reactive data set for Kable table
+kbl_df <- reactive({
+  if (input$measure == "Union density") {
+    kb_prep(dataset())
+  } else if (input$measure %in% c("Distribution (%)", "Distribution (N)")) {
+    kb_prep(dataset_pop())
+  }
+})
+```
+
+```{r server_helper}
+#| context: server
+##### HELPER
+
+# Programmatic chart and output height
+n_facets <- function() {
+  # All vertical and horizontal charts
+  if (input$gg_layout %in% c("Vertical", "Horizontal")) {
+    return (500 * (distinct(dataset(), varlevel) |> nrow() /  2))
+    # Stacked charts for demographics
+  } else if (input$gg_layout == "Stacked" &
+             input$variable != "Employment status" &
+             input$measure != "Union density") {
+    return(650)
+  } else if (input$gg_layout == "Stacked" &
+           input$variable == "Employment status" &
+           input$measure != "Union density") {
+    return(1200)
+  } else if (input$gg_layout == "Stacked" &
+           input$measure == "Union density") {
+    return (500 * (distinct(dataset(), varlevel) |> nrow() /  2))
+  }
+}
+
+# Number of facets desired by variable
+num_rows <- reactive(
+  case_when(
+    input$variable %in% c("Gender","Immigration","Age group","Student status") ~ 1,
+    input$variable %in% c(
+      "Education level",
+      "Family type",
+      "Youngest child",
+      "Job tenure",
+      "Firm size",
+      "Establishment size"
+    ) ~ 2,
+    input$variable %in%
+      c(
+        "Province",
+        "CMA",
+        "Occupation",
+        "Employment status"
+      ) ~ 4,
+    input$variable %in% c("Industry") ~ 7
+  )
+)
+
+# Area margins desired by variable
+area_margins <- reactive(
+  case_when(
+    input$variable %in% c("Gender") ~ 75,
+    input$variable %in% c(
+      "Job tenure",
+      "Age group",
+      "Family type",
+      "Youngest child",
+      "Student status"
+    ) ~ 130,
+    input$variable %in%
+      c("Province", "CMA","Education level","Immigration","Employment status", "Firm size", "Establishment size") ~ 150,
+    input$variable %in% c("Industry", "Occupation") ~ 270
+  )
+)
+
+## Table helpers
+# Kable table prep
+kb_prep <- function(df) {
+  
+  variable <- df |> distinct(variable) |> pull(variable) |> as.character()
+  
+  if (input$measure == "Union density") {
+    df <- df |>
+      filter(union_bin == "Union member") |> 
+      select(survyear, cowmain_rc, varlevel, value = p) |> 
+      pivot_wider(
+        id_cols = c(survyear, cowmain_rc),
+        names_from = varlevel,
+        values_fn = \(x) cell_spec(formattable::percent(x, digits = 1))
+      ) 
+    
+  } else if (input$measure == "Distribution (%)") {
+    df <- df |>
+      select(survyear, cowmain_rc, varlevel, value = p_memb) |> 
+      pivot_wider(
+        id_cols = c(survyear, cowmain_rc),
+        names_from = varlevel,
+        values_fn = \(x) cell_spec(formattable::percent(x, digits = 1))
+      ) 
+  }
+  
+  else if (input$measure == "Distribution (N)") {
+    df <- df |>
+      select(survyear, cowmain_rc, varlevel, value = n) |> 
+      pivot_wider(
+        id_cols = c(survyear, cowmain_rc),
+        names_from = varlevel,
+        values_fn = \(x) cell_spec(formattable::comma(x/1000, digits = 0)) 
+      ) 
+  }
+  
+  if (input$variable %in% c("Industry", "Occupation")) {
+    df |> 
+      pivot_longer(3:last_col()) |> 
+      pivot_wider(names_from = 1) |> 
+      arrange(cowmain_rc) 
+
+  } else {
+    df |> 
+      arrange(cowmain_rc) 
+  }
+}
+
+# Plot top label
+plot_title <- reactive({
+  if (input$measure == "Union density") {
+    "<span style='font-size:18px'><b>Union density</b></span>"
+  } else if (input$measure == "Distribution (%)") {
+    "<span style='font-size:18px'><b>Membership distribution (%)/b></span>"
+  } else if (input$measure == "Distribution (N)") {
+    "<span style='font-size:18px'><b>Membership distribution (N)</b></span>"
+  }
+})
+
+# Table subtitles
+kb_title <- reactive({
+  if (input$measure == "Union density") {
+    "<span style='font-size:18px'><b>Union density (% of group that are Union members)</b></span>"
+  } else if (input$measure == "Distribution (%)") {
+    "<span style='font-size:18px'><b>Distribution Union member by group</b></span>"
+  } else if (input$measure == "Distribution (N)") {
+    "<span style='font-size:18px'><b>Number of union members in thousands</b></span>"
+  }
+})
+```
+
+```{r server_plots}
+#| context: server
+##### Base plot functions
+
+# Union density (Vertical and Horizontal)
+union_density_gg <- function(.data, pal) {
+  
+  # For ordering plots by average values of coverage
+  if (input$gg_layout == "Horizontal") {
+    horiz_levels <- filter(.data, union_bin == "Union member") |>
+      group_by(varlevel) |>
+      reframe(p = mean(p, na.rm = TRUE)) |>
+      arrange(-p) |>
+      pull(varlevel) |>
+      as.character()
+
+    .data <- mutate(.data, varlevel = factor(varlevel, levels = horiz_levels))
+  }
+
+  gg <- ggplot(
+    .data,
+    aes(
+      x = .data$survyear,
+      y = .data$p,
+      fill = .data$union_bin,
+      color = .data$union_bin
+    )
+  ) +
+    geom_area(alpha = 0.55) +
+    geom_point(data = filter(.data, union_bin == "Union member"),
+               size = 2.25) +
+    geom_hline(yintercept = 0, color = "#d8d8d8") +
+    coord_cartesian(clip = "off") +
+    scale_y_continuous(labels = label_percent(),
+                       expand = c(0, 0)) +
+    scale_fill_manual(values = pal, na.value = "#DADDEF") +
+    scale_color_manual(values = pal, na.value = "#DADDEF") +
+    theme_rr_dash() +
+    theme(
+      panel.grid = element_blank(),
+      axis.text.y.left = element_blank(),
+      panel.spacing.y = unit(15, "pt")
+    ) +
+    labs(x = NULL, y = NULL)
+  
+  # Vertical layout
+  if (input$gg_layout == "Vertical") {
+    gg +
+      geom_text(
+        data = filter(
+          .data,
+          union_bin == "Union member",
+          survyear %in% seq(2006, 2024, by = 3)
+        ),
+        aes(label = percent(.data$p, accuracy = .1)),
+        vjust = 0,
+        hjust = 0.5,
+        nudge_y = .04,
+        fontface = "bold",
+        size = 6
+      ) +
+      scale_x_continuous(
+        expand = c(0.05, 0.05),
+        breaks = seq(2006, 2024, by = 3),
+        guide = guide_axis(check.overlap = TRUE)
+      ) +
+      facet_wrap(vars(varlevel),
+                 ncol = 1,
+                 dir = "v",
+                 axes = "all_x")
+    
+    # Horizontal layout
+  } else if (input$gg_layout == "Horizontal") {
+    
+    gg +
+    geom_text_repel(
+      data = filter(
+        .data,
+        union_bin == "Union member",
+        survyear %in% seq(2006, 2024, by = 6)
+      ),
+      aes(label = percent(.data$p, accuracy = .1)),
+      vjust = 0,
+      #hjust = 0.42,
+      hjust = 0.5,
+      nudge_y = .04,
+      #check_overlap = TRUE,
+      fontface = "bold",
+      size = 6,
+      point.size = NA,
+      min.segment.length = Inf,
+      force = .25
+    ) +
+    theme(
+      panel.spacing.x = unit(10, "pt"),
+     # axis.text.x = element_markdown(hjust = c(0, 1)),
+      strip.clip = "on"
+    ) +
+    scale_x_continuous(
+      expand = c(0.05, 0.05),
+      breaks = seq(2006, 2024, by = 6),
+      guide = guide_axis(check.overlap = TRUE)
+    ) +
+    facet_wrap(
+      vars(varlevel),
+      nrow = num_rows(),
+      dir = "h",
+      axes = "all_x",
+      drop = TRUE,
+      labeller = label_wrap_gen(width = 30)
+    )
+  }
+}
+
+# Union density (Stacked, total workforce)
+union_density_stacked_gg <- function(.data) {
+  
+  req(input$measure == "Union density")
+  
+  dens_pal_flat <- c(
+    `Private (Unionized)` = dashpal[2],
+    `Private (No union)` = colorspace::lighten(dashpal[2], .5),
+    `Public (Unionized)` = dashpal[1],
+    `Public (No union)` = colorspace::lighten(dashpal[1], .5)
+  )
+  
+  .data <- mutate(.data, unioncow = fct_rev(unioncow))
+  
+  gg <- .data |>
+    ggplot(
+      aes(
+        x = .data$survyear,
+        y = .data$p_pop,
+        fill = .data$unioncow,
+      )
+    ) +
+    geom_area(
+      aes(color = .data$unioncow),
+      show.legend = c(fill = TRUE, color = NA)
+    ) +
+    geom_label(
+      data = filter(.data, 
+                    survyear %in% seq(2006,2024, by = 3),
+                    p_pop >= .03),
+      aes(
+        label = percent(.data$p_pop, accuracy = .1),
+        group = unioncow
+      ),
+      vjust = 0.5,
+      hjust = 0.5,
+      fontface = "bold",
+      size = 6,
+      position = "stack",
+      color = "#fff",
+      label.padding = unit(.01, "lines"),
+      show.legend = FALSE
+    ) +
+    geom_hline(yintercept = 0, color = "#d8d8d8") +
+    coord_cartesian(clip = "off") +
+    scale_x_continuous(breaks = seq(2006, 2024, by = 3),
+                       guide = guide_axis(check.overlap = TRUE)) +
+    scale_y_continuous(labels = label_percent(),
+                       expand = c(0, 0)) +
+    
+    scale_fill_manual(values = dens_pal_flat, na.value = "#DADDEF") +
+    scale_color_manual(values = dens_pal_flat, na.value = "#DADDEF", guide = "none") +
+    theme_rr_dash() +
+    guides(fill = guide_legend(reverse = TRUE, title = NULL)
+           ) +
+    theme(
+      legend.position = "top",
+      legend.text = element_text(size = 18, face = 'bold'),
+      legend.key.size = unit(22, 'pt'),
+      panel.grid = element_blank(),
+      axis.text.y.left = element_blank(),
+      panel.spacing.y = unit(15, "pt")
+    ) +
+    labs(x = NULL, y = NULL, 
+         subtitle = 
+           glue("Union member share of workforce (paid employees) by {input$variable}")) +
+    facet_wrap(vars(varlevel), ncol = 2, dir = "v", axes = "all_x")
+}
+
+# Demographics, bar charts
+union_bars_gg <- function(.data, pal) {
+  .data <- filter(.data, survyear %in% seq(2006, 2024, by = 3))
+  
+  # For ordering plots by average values horizontally - Proportions
+  if (input$gg_layout == "Horizontal" &
+      input$measure == "Distribution (%)") {
+    horiz_levels <- group_by(.data, varlevel) |>
+      reframe(p_memb = mean(p_memb)) |>
+      arrange(-p_memb) |>
+      pull(varlevel)
+    
+    .data <- mutate(.data, varlevel = factor(varlevel, levels = horiz_levels))
+    
+    # For ordering plots by average values horizontally - Counts
+  } else if (input$gg_layout == "Horizontal" &
+             input$measure == "Distribution (N)") {
+    horiz_levels <- group_by(.data, varlevel) |>
+      reframe(n = sum(n)) |>
+      arrange(-n) |>
+      pull(varlevel)
+    
+    .data <- mutate(.data, varlevel = factor(varlevel, levels = horiz_levels))
+  }
+  
+  ##### FOR PROPORTIONS
+  if (input$measure == "Distribution (%)") {
+    .data <- select(.data,
+                    survyear,
+                    variable,
+                    varlevel,
+                    cowmain_rc,
+                    p_memb,
+                    p_memb_bd) |>
+      pivot_longer(
+        cols = p_memb:p_memb_bd,
+        names_to = "fillvar",
+        values_to = "p_memb"
+      ) |>
+      mutate(
+        fillvar = ifelse(fillvar == "p_memb", "yes", "no"),
+        fillvar = factor(fillvar, levels = c("no", "yes")))
+    
+    gg <- ggplot(
+      .data,
+      aes(
+        x = .data$survyear,
+        y = .data$p_memb,
+        fill = .data$fillvar
+      )
+    ) +
+      geom_col(position = "fill") +
+      geom_hline(yintercept = 0, color = "#d8d8d8") +
+      geom_bar_text(
+        data = filter(.data, fillvar == "yes"),
+        formatter = percent_format(accuracy = .1),
+        fontface = "bold",
+        outside = TRUE,
+        contrast = TRUE,
+        size = 16,
+        min.size = 12
+      ) +
+      scale_y_continuous(labels = percent_format(accuracy = 1L)) +
+      scale_fill_manual(values = pal, na.value = "#DADDEF") +
+      theme_rr_dash() +
+      theme(panel.grid = element_blank()) +
+      labs(x = NULL, y = NULL)
+    
+    ##### FOR COUNTS
+  } else if (input$measure == "Distribution (N)") {
+    gg <- ggplot(.data,
+                 aes(
+                   x = .data$survyear,
+                   y = .data$n,
+                   fill = .data$cowmain_rc,
+                 )) +
+      geom_col() +
+      geom_hline(yintercept = 0, color = "#d8d8d8", linewidth = 1.45) +
+      geom_bar_text(
+        formatter = number_format(accuracy = .1, scale_cut = cut_short_scale()),
+        fontface = "bold",
+        outside = TRUE,
+        contrast = TRUE,
+        size = 15,
+        min.size = 12
+      ) +
+      scale_y_continuous(expand = expansion(mult = c(0,.1))) +
+      scale_fill_manual(values = c(`Public sector` = dashpal[1], `Private sector` = dashpal[2])) +
+      theme_rr_dash() +
+      theme(panel.grid = element_blank(), axis.text.y = element_blank(),
+            panel.background = element_rect(fill = '#fafafa', colour = '#d9d9d9')) +
+      labs(x = NULL, y = NULL)
+  }
+  
+  ##### VERTICAL LAYOUT
+  if (input$gg_layout == "Vertical") {
+    gg +
+      scale_x_continuous(
+        expand = c(0.05, 0.05),
+        breaks = seq(2006, 2024, by = 3),
+        guide = guide_axis(check.overlap = TRUE)
+      ) +
+      theme(axis.text.y = element_blank(),
+            panel.spacing.y = unit(15, "pt")) +
+      facet_wrap(vars(varlevel),
+                 ncol = 1,
+                 dir = "v",
+                 drop = FALSE,
+                 axes = "all_x") 
+    
+    ##### HORIZONTAL LAYOUT
+  } else if (input$gg_layout == "Horizontal") {
+    gg + scale_x_continuous(
+      expand = c(0.05, 0.05),
+      breaks = seq(2006, 2024, by = 3),
+      guide = guide_axis(check.overlap = TRUE)
+    ) +
+      facet_wrap(
+        vars(fct_reorder(varlevel, p_memb, na.rm = TRUE)),
+        nrow = num_rows(),
+        dir = "h",
+        axes = "all_x",
+        drop = TRUE,
+        labeller = label_wrap_gen(width = 30)
+      ) +
+      theme(panel.spacing.x = unit(10, "pt"),
+            panel.spacing.y = unit(15, "pt"),
+            strip.clip = "on")
+  }
+}
+
+## Patchwork functions
+# Create two charts per sector, patchwork into one chart
+union_density_patch <- function(df, pal) {
+  
+  if (input$gg_layout %in% c("Vertical", "Horizontal")) {
+    ggs <- group_by(df, cowmain_rc) |>
+      group_split() |>
+      map2(pal, \(x, y) union_density_gg(x, y))
+    
+    ggs[[1]] <- ggs[[1]] +
+      ggtitle("PRIVATE SECTOR", subtitle = "Share of paid employees that are union members") +
+      theme(plot.title = element_text(color = dashpal[2]))
+    
+    ggs[[2]] <- ggs[[2]] +
+      ggtitle("PUBLIC SECTOR", subtitle = "Share of paid employees that are union members") +
+      theme(plot.title = element_text(color = dashpal[1]))
+    
+    if (input$gg_layout == "Vertical") {
+      ggs[[1]] + ggs[[2]]
+    } else if (input$gg_layout == "Horizontal") {
+      ggs[[1]] / ggs[[2]]
+    }
+  } else if (input$gg_layout == "Stacked") {
+    union_density_stacked_gg(df)
+  }
+}
+
+# Bar chart patchwork by sector function
+union_bars_patch <- function(df, pal) {
+  
+  facet_blank <- function(str) {str_replace_all(str, ".", "")}
+  
+  subtitle <- case_when(
+    input$measure == "Distribution (%)" ~ glue("Share of total union members by {input$variable}"),
+    input$measure == "Distribution (N)" ~ glue("Number of union members by {input$variable}")
+  )
+  
+  ggs <- group_by(df, cowmain_rc) |> 
+    group_split() |> 
+    map2(pal, \(x,y) union_bars_gg(x, y))
+  
+  ggs[[1]] <- ggs[[1]] + 
+    ggtitle("PRIVATE SECTOR", subtitle = subtitle) +
+    theme(plot.title = element_text(color = dashpal[2]))
+  
+  ggs[[2]] <- ggs[[2]] + 
+    ggtitle("PUBLIC SECTOR", subtitle = subtitle) +
+    theme(plot.title = element_text(color = dashpal[1]))
+  
+  if(input$gg_layout == "Vertical") {
+    ggs[[1]] + ggs[[2]]
+    
+  } else if (input$gg_layout == "Horizontal") {
+    ggs[[1]] / ggs[[2]]
+    
+  }
+}
+
+# Stacked area chart for stacked format
+union_area_gg <- function(.data) {
+  
+  if(input$gg_layout == "Stacked" & 
+      input$ordering == "Descending") {
+   .data <- mutate(.data, varlevel = fct_reorder(varlevel, p_memb, na.rm = TRUE))
+  }
+  
+  if (input$gg_layout == "Stacked" & input$measure == "Distribution (%)") {
+  gg <- ggplot(.data, aes(.data$survyear, .data$p_memb, fill = .data$varlevel))
+  
+  } else if (input$gg_layout == "Stacked" & input$measure == "Distribution (N)") {
+  gg <- ggplot(.data, aes(.data$survyear, .data$n, fill = .data$varlevel))
+  
+  }
+  
+  gg <- gg +
+    geom_area(color = "#fff") +
+    geom_label_repel(
+      data = filter(.data, survyear == 2024, p_memb >= .01),
+      aes(
+        label = .data$varlevel,
+        color = after_scale(prismatic::best_contrast(fill, c("white", "black")))
+      ),
+      position = ggpp::position_stacknudge(x = .5, vjust = 0.35),
+      size = 5,
+      fontface = "bold",
+      force = 0.05,
+      force_pull = 0.05,
+      point.padding = .02,
+      label.padding = .2,
+      hjust = 0,
+      seed = 2024,
+      direction = "y",
+      xlim = c(2024, 2150),
+      min.segment.length = 0.35
+    ) +
+    geom_hline(yintercept = 0) +
+    coord_cartesian(clip = "off") +
+    scale_x_continuous(breaks = seq(2006, 2024, by = 6), expand = c(0,0)) +
+    scale_fill_manual(values = rpal) +
+    theme_rr_dash() +
+    theme(
+      panel.grid.major.x = element_blank(),
+      panel.spacing.x = unit(area_margins(), "pt"),
+      plot.margin = margin(r = unit(area_margins(), "pt"))
+    ) +
+    facet_wrap(vars(cowmain_rc)) +
+    labs(x = NULL, y = NULL)
+  
+  if (input$measure == "Distribution (%)") {
+    gg<- gg + labs(
+      subtitle = glue("Distribution of union members by {input$variable}")) +
+          scale_y_continuous(
+            labels = label_percent(accuracy = 1L), expand = c(0, 0))
+    
+  } else if (input$measure == "Distribution (N)") {
+    gg <- gg + labs(subtitle = glue("Number of union members by {input$variable}")) +
+      scale_y_continuous(
+        labels = label_number(accuracy = .1, scale_cut = cut_short_scale()), expand = c(0, 0))
+  }
+  
+  if (input$variable == "Employment status") {
+    gg + facet_wrap(vars(var_orig, cowmain_rc), ncol = 2)
+  } else
+  gg
+}
+
+# Table function
+union_kbl <- function(df) {
+
+kb_rows <- df |> 
+  rownames_to_column() |> 
+  group_by(cowmain_rc) |> 
+  summarise(rowfirst = first(rowname), rowlast = last(rowname))
+
+kb_align <- c("l", rep("r", ncol(df)-1))
+
+df |> 
+  ungroup() |> 
+  select(-cowmain_rc) |> 
+  rename(Year = 1) |> 
+  kbl(format = "html", escape = FALSE, align = kb_align) |> 
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "responsive"),
+    font_size = 16,
+    fixed_thead = T) |> 
+  pack_rows("Private sector",
+            kb_rows[kb_rows$cowmain_rc=="Private sector",]$rowfirst,
+            kb_rows[kb_rows$cowmain_rc=="Private sector",]$rowlast,
+            label_row_css = "border-bottom: 1px solid;background-color:#117777;color:#fff") |> 
+  pack_rows("Public sector",
+            kb_rows[kb_rows$cowmain_rc=="Public sector",]$rowfirst,
+            kb_rows[kb_rows$cowmain_rc=="Public sector",]$rowlast,
+            label_row_css = "border-bottom: 1px solid;background-color:#771155;color:#fff") |> 
+  scroll_box(width = "100%", height = "700px", fixed_thead = T)
+
+}
+```
+
+```{r server_output}
+#| context: server
+##### OUTPUT
+# Render charts
+output$plot <- renderPlot({
+  # Density charts
+  if (input$measure == "Union density"  &
+      input$gg_layout %in% c("Horizontal", "Vertical")) {
+    p <- union_density_patch(dataset(), dens_pal)
+  } else if (input$measure == "Union density"  &
+             input$gg_layout == "Stacked") {
+    p <- union_density_stacked_gg(dataset())
+  } else if (input$measure %in% c("Distribution (%)", "Distribution (N)") &
+             input$gg_layout %in% c("Horizontal", "Vertical")) {
+    p <- union_bars_patch(dataset_pop(), bar_pal)
+  } else if (input$measure %in% c("Distribution (%)", "Distribution (N)") &
+             input$gg_layout == "Stacked") {
+    p <- union_area_gg(dataset_pop())
+  }
+  return(p)
+}
+, height = n_facets)
+
+# Create plot title output
+output$plot_title <- renderText({
+  cat("title=", plot_title())
+  })
+
+# Create plot title output
+output$table_title <- renderText({kb_title()})
+
+# Create table output
+output$table <- reactive({union_kbl(kbl_df())})
+
+##### Data for download
+# Reactive dataset
+dataset_out <- reactive({
+  
+  if (input$measure == "Union density") {
+  ds <- dataset() 
+  ds <- ds |> 
+      select(survyear,
+             variable,
+             varlevel,
+             sector = cowmain_rc,
+             union = union_bin,
+             pop = n, 
+             p_in_union = p, 
+             p_population = p_pop)
+  
+  } else if (input$measure %in% c("Distribution (%)", "Distribution (N)")) {
+    ds <- dataset_pop() 
+    ds <- ds |> 
+      select(survyear,
+             variable,
+             varlevel,
+             sector = cowmain_rc,
+             members = n, 
+             p_members = p_memb)
+  }
+  
+  ds
+ })
+
+output$data_preview <- renderTable({
+  dataset_out() |> 
+  head(20) 
+})
+
+output$data <- downloadHandler(
+    filename = function() {
+      paste(input$variable, ".csv", sep = "")
+    },
+    content = function(file) {
+      write.csv(output_data(), file, row.names = FALSE)
+    }
+  )
+```

@@ -2,9 +2,30 @@
 library(targets)
 library(tarchetypes)
 
+tar_pkg <- c(
+  "tidyverse",
+  "quarto",
+  "targets",
+  "here",
+  "scales",
+  "qs",
+  "zoo",
+  "data.table",
+  "dtplyr",
+  "patchwork",
+  "shiny",
+  "shinyjs",
+  "rlang",
+  "ggrepel",
+  "ggtext",
+  "ggfittext",
+  "kableExtra",
+  "glue"
+)
+
 # Set target options:
 tar_option_set(
-  packages = c("tidyverse", "here", "zoo", "janitor", "data.table", "dtplyr"),
+  packages = tar_pkg,
   format = "qs",
   error = NULL
 )
@@ -42,5 +63,8 @@ list(
   tar_target(
     dist_df,
     dist_data_prep(lfs_freq_prep)
+  ),
+  tar_quarto(
+    lfs_dashboard, path = "index.qmd"
   )
 )
