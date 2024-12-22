@@ -5,12 +5,11 @@ editor: visual
 format: 
   dashboard:
     scrolling: false
-    theme: 
-      - sandstone
-      - lfs_dash_style.css
-server: shiny
+    theme: [lux, custom.scss]
+    css: [styles.scss]
 tbl-cap-location: top
 cap-location: top
+server: shiny
 execute:
   echo: false
   warning: false
@@ -282,7 +281,7 @@ shinyjs::hidden(selectInput("ordering",
 
 -   **Grey zone:** Prior to 1872, it was illegal for workers to organize unions in Canada. Following the passage of the Trade Union Act that year, unions existed in a legal grey zone. Workers were no longer legally forbidden from creating unions, however, they had virtually no legal rights or protections in that area. Employers had no obligation to bargain with their employees, nor to even abide by the terms of an agreement were one to be rarely signed.
 
--   **Post-war take-off:** Unions would exit the grey zone at end of World War Two, which was capped off by a [massive strike by Ford workers in Windsor in 1945](https://canadianlabour.ca/who-we-are/history/1945-windsors-ford-strike/). In the wake of that strike, a system of formalized and legally bound collective bargaining was created, along the lines of the [Wagner](https://www.nlrb.gov/about-nlrb/who-we-are/our-history/1935-passage-of-the-wagner-act) mode lof industrial relations adopted in the United States. A key legal ruling establishing what is known as [*the Rand Formula*](https://canadianlabour.ca/who-we-are/history/the-rand-decision-everyone-who-benefits-should-contribute/)established that all who benefit from a union contract should pay dues to the union. As a result, union membership and activity expanded greatly from 1940s to the mid 1960s.
+-   **Post-war take-off:** Unions would exit the grey zone at end of World War Two, which was capped off by a [massive strike by Ford workers in Windsor in 1945](https://canadianlabour.ca/who-we-are/history/1945-windsors-ford-strike/). In the wake of that strike, a system of formalized and legally bound collective bargaining was created, along the lines of the [Wagner](https://www.nlrb.gov/about-nlrb/who-we-are/our-history/1935-passage-of-the-wagner-act) mode lof industrial relations adopted in the United States. A key legal ruling establishing what is known as [*the Rand Formula*](https://canadianlabour.ca/who-we-are/history/the-rand-decision-everyone-who-benefits-should-contribute/) established that all who benefit from a union contract should pay dues to the union. As a result, union membership and activity expanded greatly from 1940s to the mid 1960s.
 
 -   **Public sector bargaining:** While public sector workers could also form unions, they did not win the right to collective bargaining alongside their private sector counterparts. It was not until 1965 that public sector workers won the right to bargain - a victory won by an [illegal wildcat strike by postal workers](https://canadianlabour.ca/who-we-are/history/1965-public-service-workers-win-bargaining-rights/).
 
@@ -473,8 +472,8 @@ Another reason is that public sector jobs cannot be off-shored in the same way p
 ```{r}
 #| fill: false
 #| flow: true
-#| dev: "svg"
-plotOutput('plot', height = "100%", width = "100%")
+#| fig-dpi: 300
+plotOutput('plot', height = "100%", width = "auto")
 ```
 
 # Table
@@ -811,7 +810,6 @@ union_density_gg <- function(.data, pal) {
       hjust = 0.5,
       nudge_y = .04,
       #check_overlap = TRUE,
-      fontface = "bold",
       size = 6,
       point.size = NA,
       min.segment.length = Inf,

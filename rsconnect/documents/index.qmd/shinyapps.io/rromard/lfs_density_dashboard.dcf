@@ -1,0 +1,15 @@
+name: lfs_density_dashboard
+title: lfs_density_dashboard
+username: rromard
+account: rromard
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 13632084
+bundleId: 9556020
+url: https://rromard.shinyapps.io/lfs_density_dashboard/
+version: 1
+quarto_version: 1.6.37
+quarto_engines: knitr
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: _targets.R|R/functions.R|R/global_objects.R|R/supplemental_density_prep.R|_targets
