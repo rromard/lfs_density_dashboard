@@ -1,0 +1,104 @@
+---
+title: "Union Density in Canada"
+author: "Ryan Romard"
+editor: visual
+format: 
+  dashboard:
+    theme: [lux, custom.scss]
+    expandable: false
+    scrolling: true
+tbl-cap-location: top
+cap-location: top
+execute:
+  echo: false
+  warning: false
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{=html}
+<script>
+const chartIds = {
+  "education-level": { public: "PKwgQ", private: "fJEdR" },
+  "age-group": { public: "e9R8c", private: "SiZ3B" },
+  "gender": { public: "Qvury", private: "j1oYG" }
+};
+
+function updateContent() {
+  const variable = document.getElementById("variable-select").value;
+
+  // Clear and update Public Sector Chart
+  const publicChartContainer = document.getElementById("public-sector-chart");
+  publicChartContainer.innerHTML = ""; // Clear previous content
+  const publicScript = document.createElement("script");
+  publicScript.type = "text/javascript";
+  publicScript.defer = true;
+  publicScript.src = `https://datawrapper.dwcdn.net/${chartIds[variable].public}/embed.js`;
+  publicScript.setAttribute("charset", "utf-8");
+  publicScript.setAttribute("data-target", `#datawrapper-vis-${chartIds[variable].public}`);
+  const publicDiv = document.createElement("div");
+  publicDiv.style.minHeight = "400px";
+  publicDiv.id = `datawrapper-vis-${chartIds[variable].public}`;
+  publicDiv.appendChild(publicScript);
+  publicChartContainer.appendChild(publicDiv);
+
+  // Clear and update Private Sector Chart
+  const privateChartContainer = document.getElementById("private-sector-chart");
+  privateChartContainer.innerHTML = ""; // Clear previous content
+  const privateScript = document.createElement("script");
+  privateScript.type = "text/javascript";
+  privateScript.defer = true;
+  privateScript.src = `https://datawrapper.dwcdn.net/${chartIds[variable].private}/embed.js`;
+  privateScript.setAttribute("charset", "utf-8");
+  privateScript.setAttribute("data-target", `#datawrapper-vis-${chartIds[variable].private}`);
+  const privateDiv = document.createElement("div");
+  privateDiv.style.minHeight = "400px";
+  privateDiv.id = `datawrapper-vis-${chartIds[variable].private}`;
+  privateDiv.appendChild(privateScript);
+  privateChartContainer.appendChild(privateDiv);
+}
+</script>
+```
+
+#  {.toolbar}
+
+<div>
+
+
+<label for="variable-select">Select a Variable:</label>
+  <select id="variable-select" onchange="updateContent()"> 
+    <option value="province">Province</option>
+    <option value="cma">CMA</option>
+    <option value="age-group">Age group</option>
+    <option value="gender">Gender</option>
+    <option value="family-type">Family type</option>
+    <option value="youngest-child">Youngest child</option>
+    <option value="education-level">Education level</option>
+    <option value="student-status">Student status</option>
+    <option value="immigration">Immigration</option>
+    <option value="occupation">Occupation</option>
+    <option value="industry">Industry</option>
+    <option value="establishment-size">Establishment size</option>
+    <option value="firm-size">Firm size</option>
+    <option value="employment-status">Employment status</option>
+    <option value="job-tenure">Job tenure</option></select>
+
+</div>
+
+# Charts {orientation="rows" fill="false" flow="false"}
+
+## 
+
+:::: card
+::: {#public-sector-chart}
+<!-- Placeholder for dynamically injected embed -->
+:::
+::::
+
+:::: card
+::: {#private-sector-chart}
+<!-- Placeholder for dynamically injected embed -->
+:::
+::::

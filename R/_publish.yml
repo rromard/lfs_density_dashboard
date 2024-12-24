@@ -1,0 +1,4 @@
+- source: density_dashboard.qmd
+  quarto-pub:
+    - id: 31bbc211-962d-49d8-a8cc-5f2d1afc0e72
+      url: 'https://rromard.quarto.pub/labour-union-density-in-canada'
