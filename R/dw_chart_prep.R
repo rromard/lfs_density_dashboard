@@ -180,6 +180,7 @@ create_chart <- function(data, variable, sector, folder_id, annotations) {
       
       ## X-axis
       `x-grid-on` = TRUE,
+
       `x-grid-format` = "auto",
       `custom-range-x` = c(2005,2025),
       `custom-ticks-x` = "2006,2009,2012,2015,2018,2021,2024",
@@ -207,8 +208,7 @@ create_chart <- function(data, variable, sector, folder_id, annotations) {
       ## Anno
       `text-annotations` = annotations,
       ## Tooltips
-      `show-tooltips` = TRUE,
-      `sync-multiple-tooltips` = TRUE,
+      `show-tooltips` = FALSE,
       `tooltip-number-format` = "0.0%",
       `tooltip-x-format` = "YYYY"
       
@@ -223,6 +223,43 @@ create_chart <- function(data, variable, sector, folder_id, annotations) {
   return(chart_id)
 }
 
+test1 <- dw_retrieve_chart_metadata("8aaJN")
+test1$content$metadata$visualize$`x-grid-on`
+
+# Table styling
+dwdash_tab <- function(dw,color,sector) {
+  dw_edit_chart(
+    dw,
+    type = "tables,"
+    # Data
+    "data" = list(
+      "column-format" = list(
+        "variable" = list("ignore" = TRUE),
+        "cowmain_rc" = list("ignore" = TRUE),
+        list(id = "6jf4Jmc8qP",row = 0,column = 0,value = "Year",previous = "survyear",ignored = FALSE)
+      )
+    ),
+    # Describe
+    title = paste0("<span style='color:",color,";'>",str_to_upper(sector),"</span>"),
+    intro = paste("Union density (% union membership) by", variable),
+    byline = "Ryan Romard",
+    source_name = "LFS PUMF (2006-2024)",
+    source_url = "https://www150.statcan.gc.ca/n1/en/catalogue/71M0001X",
+    # Visuals
+    visualize = list(
+      # Layout
+      compactMode = TRUE,
+      mobileFallback = TRUE,
+      firstColumnIsSticky = TRUE,
+      striped = TRUE,
+      header = list(style = list(background = color))
+    ),
+    # Publish
+    "publish" = list("embed-width" = 900)
+  )
+}
+
+dw_retrieve_chart_metadata("E5SiV")
 
 # Iteration ---------------------------------------------------------------
 
@@ -267,7 +304,6 @@ folder_df <- tribble(~variable, ~folder_id,
                      "Job tenure", 285524,
 )
 
-
 # Iterate over variables and sectors
 chart_ids <- map(variables, function(variable) {
   print(paste("Processing variable:", variable))
@@ -307,39 +343,6 @@ chart_ids <- map(variables, function(variable) {
     create_chart(sector_data, variable, sector, folder_id, annotations)
   })
 })
-
-# Table styling
-dwdash_tab <- function(dw,color,sector) {
-  dw_edit_chart(
-    dw,
-    type = "tables,"
-    # Data
-    "data" = list(
-      "column-format" = list(
-        "variable" = list("ignore" = TRUE),
-        "cowmain_rc" = list("ignore" = TRUE),
-        list(id = "6jf4Jmc8qP",row = 0,column = 0,value = "Year",previous = "survyear",ignored = FALSE)
-      )
-    ),
-    # Describe
-    title = paste0("<span style='color:",color,";'>",str_to_upper(sector),"</span>"),
-    intro = paste("Union density (% union membership) by", variable),
-    byline = "Ryan Romard",
-    source_name = "LFS PUMF (2006-2024)",
-    source_url = "https://www150.statcan.gc.ca/n1/en/catalogue/71M0001X",
-    # Visuals
-    visualize = list(
-      # Layout
-      compactMode = TRUE,
-      mobileFallback = TRUE,
-      firstColumnIsSticky = TRUE,
-      striped = TRUE,
-      header = list(style = list(background = color))
-      ),
-    # Publish
-    "publish" = list("embed-width" = 900)
-  )
-}
 
 create_table <- function(data, variable, sector, folder_id) {
   # Define sector-specific color
@@ -464,24 +467,25 @@ chart_list <- dw_list_charts_manual(dw_get_api_key(), limit = 100)
 folder_list <- dw_list_folders()
 
 folder_id <- 285422
-folder_df <- tribble(~variable, ~folder_id,
-                     "Province", 285510,
-                     "CMA", 285511,
-                     "Age group", 285512,
-                     "Gender", 285513,
-                     "Family type", 285514,
-                     "Youngest child", 285515,
-                     "Education level", 285516,
-                     "Student status", 285517,
-                     "Immigration", 285518,
-                     "Occupation", 285519,
-                     "Industry", 285520,
-                     "Establishment size", 285521,
-                     "Firm size", 285522,
-                     "Employment status", 285523,
-                     "Job tenure", 285524,
+folder_df <- tribble(~variable, ~folder_id, ~var_sel,
+                     "Province", 285510, "province",
+                     "CMA", 285511, "cma",
+                     "Age group", 285512, "age-group",
+                     "Gender", 285513, "gender",
+                     "Family type", 285514, "family-type",
+                     "Youngest child", 285515, "youngest-child",
+                     "Education level", 285516, "education-level",
+                     "Student status", 285517, "student-status",
+                     "Immigration", 285518, "immigration",
+                     "Occupation", 285519, "occupation",
+                     "Industry", 285520, "industry",
+                     "Establishment size", 285521, "establishment-size",
+                     "Firm size", 285522, "firm-size",
+                     "Employment status", 285523, "employment-status",
+                     "Job tenure", 285524, "job-tenure"
 )
 
+# Extract a list of folders and charts from DW manually
 dw_list_charts_manual <- function(api_key, limit = 100) {
   base_url <- "https://api.datawrapper.de/v3/charts"
   
@@ -501,8 +505,8 @@ dw_list_charts_manual <- function(api_key, limit = 100) {
   }
 }
 
+# Turn it into a usable dataframe
 chart_list <- dw_list_charts_manual(dw_get_api_key(), limit = 200) |> as_tibble()
-
 chart_meta_df <- chart_list |> 
   filter(list.folderId %in% folder_df$folder_id) |> 
   select(
@@ -515,6 +519,141 @@ chart_meta_df <- chart_list |>
   ) |> 
   arrange(folder_id) |> 
   left_join(folder_df) |> 
-  relocate(variable, .before = 1)
+  relocate(variable, var_sel, .before = 1)
 
-chart_meta_df
+# Isolate the needed information for each chart
+var_select_df <- chart_meta_df |> 
+  mutate(
+    sector = ifelse(str_detect(chart_title, "PUBLIC"), "public", "private")
+  ) |> 
+  select(var_sel, sector, chart_type, chart_id)
+
+# Cast chart IDs to json
+chartIds <- var_select_df %>%
+  filter(chart_type == "multiple-lines") %>%
+  group_by(var_sel) %>%
+  summarise(
+    public = chart_id[sector == "public"],
+    private = chart_id[sector == "private"],
+    .groups = "drop"
+  ) %>%
+  rowwise() %>%
+  mutate(data = list(list(public = public, private = private))) %>%
+  ungroup() %>%
+  select(var_sel, data) %>%
+  deframe()
+
+# Convert to JSON without arrays
+chartIds_json <- toJSON(chartIds, pretty = TRUE, auto_unbox = TRUE)
+
+# View JSON
+cat(chartIds_json)
+
+# Cast table IDs to json
+tableIds <- var_select_df %>%
+  filter(chart_type == "tables") %>%
+  group_by(var_sel) %>%
+  summarise(
+    public = chart_id[sector == "public"],
+    private = chart_id[sector == "private"],
+    .groups = "drop"
+  ) %>%
+  rowwise() %>%
+  mutate(data = list(list(public = public, private = private))) %>%
+  ungroup() %>%
+  select(var_sel, data) %>%
+  deframe()
+
+# Convert to JSON without arrays
+tableIds_json <- toJSON(tableIds, pretty = TRUE, auto_unbox = TRUE)
+
+# View JSON
+cat(tableIds_json)
+
+```{=html}
+<script>
+  const chartIds = {
+    
+    "education-level": ["PKwgQ", "fJEdR"],
+    "age-group": { public: "e9R8c", private: "SiZ3B" },
+    "gender": { public: "Qvury", private: "j1oYG" }
+    
+  };
+
+const tableIds = {
+  "education-level": { public: "Mm8vM", private: "fyj4k" },
+  "age-group": { public: "E5SiV", private: "10TGY" },
+  "gender": { public: "xQsIS", private: "zAHKb" }
+};
+
+function updateContent() {
+  const variable = document.getElementById("variable-select").value;
+  
+  // Clear and update Public Sector Chart
+  const publicChartContainer = document.getElementById("public-sector-chart");
+  publicChartContainer.innerHTML = ""; // Clear previous content
+  const publicScript = document.createElement("script");
+  publicScript.type = "text/javascript";
+  publicScript.defer = true;
+  publicScript.src = `https://datawrapper.dwcdn.net/${chartIds[variable].public}/embed.js`;
+  publicScript.setAttribute("charset", "utf-8");
+  publicScript.setAttribute("data-target", `#datawrapper-vis-${chartIds[variable].public}`);
+  const publicDiv = document.createElement("div");
+  publicDiv.style.minHeight = "400px";
+  publicDiv.id = `datawrapper-vis-${chartIds[variable].public}`;
+  publicDiv.appendChild(publicScript);
+  publicChartContainer.appendChild(publicDiv);
+  
+  // Clear and update Private Sector Chart
+  const privateChartContainer = document.getElementById("private-sector-chart");
+  privateChartContainer.innerHTML = ""; // Clear previous content
+  const privateScript = document.createElement("script");
+  privateScript.type = "text/javascript";
+  privateScript.defer = true;
+  privateScript.src = `https://datawrapper.dwcdn.net/${chartIds[variable].private}/embed.js`;
+  privateScript.setAttribute("charset", "utf-8");
+  privateScript.setAttribute("data-target", `#datawrapper-vis-${chartIds[variable].private}`);
+  const privateDiv = document.createElement("div");
+  privateDiv.style.minHeight = "400px";
+  privateDiv.id = `datawrapper-vis-${chartIds[variable].private}`;
+  privateDiv.appendChild(privateScript);
+  privateChartContainer.appendChild(privateDiv);
+  
+  // Clear and update Public Sector Table
+  const publicTableContainer = document.getElementById("public-sector-table");
+  publicTableContainer.innerHTML = ""; // Clear previous content
+  const publicTableScript = document.createElement("script");
+  publicTableScript.type = "text/javascript";
+  publicTableScript.defer = true;
+  publicTableScript.src = `https://datawrapper.dwcdn.net/${tableIds[variable].public}/embed.js`;
+  publicTableScript.setAttribute("charset", "utf-8");
+  publicTableScript.setAttribute("data-target", `#datawrapper-vis-${tableIds[variable].public}`);
+  const publicTableDiv = document.createElement("div");
+  publicTableDiv.style.minHeight = "400px";
+  publicTableDiv.id = `datawrapper-vis-${tableIds[variable].public}`;
+  publicTableDiv.appendChild(publicTableScript);
+  publicTableContainer.appendChild(publicTableDiv);
+  
+  // Clear and update Private Sector Table
+  const privateTableContainer = document.getElementById("private-sector-table");
+  privateTableContainer.innerHTML = ""; // Clear previous content
+  const privateTableScript = document.createElement("script");
+  privateTableScript.type = "text/javascript";
+  privateTableScript.defer = true;
+  privateTableScript.src = `https://datawrapper.dwcdn.net/${tableIds[variable].private}/embed.js`;
+  privateTableScript.setAttribute("charset", "utf-8");
+  privateTableScript.setAttribute("data-target", `#datawrapper-vis-${tableIds[variable].private}`);
+  const privateTableDiv = document.createElement("div");
+  privateTableDiv.style.minHeight = "400px";
+  privateTableDiv.id = `datawrapper-vis-${tableIds[variable].private}`;
+  privateTableDiv.appendChild(privateTableScript);
+  privateTableContainer.appendChild(privateTableDiv);
+}
+
+// Initialize the dashboard on page load
+document.addEventListener("DOMContentLoaded", function() {
+  document.getElementById("variable-select").value = "education-level"; // Default variable
+  updateContent();
+});
+</script>
+  ```

@@ -7,8 +7,6 @@ format:
     theme: [lux, custom.scss]
     expandable: false
     scrolling: true
-tbl-cap-location: top
-cap-location: top
 execute:
   echo: false
   warning: false
@@ -21,9 +19,129 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 ```{=html}
 <script>
 const chartIds = {
-  "education-level": { public: "PKwgQ", private: "fJEdR" },
-  "age-group": { public: "e9R8c", private: "SiZ3B" },
-  "gender": { public: "Qvury", private: "j1oYG" }
+  "age-group": {
+    "public": "e9R8c",
+    "private": "SiZ3B"
+  },
+  "cma": {
+    "public": "1jIVH",
+    "private": "ZRE1O"
+  },
+  "education-level": {
+    "public": "PKwgQ",
+    "private": "fJEdR"
+  },
+  "employment-status": {
+    "public": "8uKWJ",
+    "private": "RD540"
+  },
+  "establishment-size": {
+    "public": "5lBja",
+    "private": "74915"
+  },
+  "family-type": {
+    "public": "tybpC",
+    "private": "vvs84"
+  },
+  "firm-size": {
+    "public": "FoqHp",
+    "private": "A1tur"
+  },
+  "gender": {
+    "public": "Qvury",
+    "private": "j1oYG"
+  },
+  "immigration": {
+    "public": "uwhwB",
+    "private": "9w1KS"
+  },
+  "industry": {
+    "public": "a6wWr",
+    "private": "f951p"
+  },
+  "job-tenure": {
+    "public": "0WDMU",
+    "private": "0KvRa"
+  },
+  "occupation": {
+    "public": "OZYfv",
+    "private": "jf6wT"
+  },
+  "province": {
+    "public": "8aaJN",
+    "private": "PNGoR"
+  },
+  "student-status": {
+    "public": "u7IUG",
+    "private": "KLX9W"
+  },
+  "youngest-child": {
+    "public": "dn2tJ",
+    "private": "UNvXj"
+  }
+};
+
+const tableIds = {
+  "age-group": {
+    "public": "E5SiV",
+    "private": "10TGY"
+  },
+  "cma": {
+    "public": "BOPNP",
+    "private": "6MrGB"
+  },
+  "education-level": {
+    "public": "Mm8vM",
+    "private": "fyj4k"
+  },
+  "employment-status": {
+    "public": "RPcNG",
+    "private": "LaWvK"
+  },
+  "establishment-size": {
+    "public": "Rsacy",
+    "private": "tYDRm"
+  },
+  "family-type": {
+    "public": "bffmm",
+    "private": "W9Fsq"
+  },
+  "firm-size": {
+    "public": "Wsfqt",
+    "private": "87igE"
+  },
+  "gender": {
+    "public": "xQsIS",
+    "private": "zAHKb"
+  },
+  "immigration": {
+    "public": "DzAFu",
+    "private": "frhP9"
+  },
+  "industry": {
+    "public": "GnOI6",
+    "private": "TT37F"
+  },
+  "job-tenure": {
+    "public": "higmY",
+    "private": "q3Wcf"
+  },
+  "occupation": {
+    "public": "HdsEA",
+    "private": "YRiHQ"
+  },
+  "province": {
+    "public": "DIQCC",
+    "private": "ZOcZQ"
+  },
+  "student-status": {
+    "public": "ohdTc",
+    "private": "i3gIs"
+  },
+  "youngest-child": {
+    "public": "lzTGo",
+    "private": "7llF0"
+  }
 };
 
 function updateContent() {
@@ -58,7 +176,43 @@ function updateContent() {
   privateDiv.id = `datawrapper-vis-${chartIds[variable].private}`;
   privateDiv.appendChild(privateScript);
   privateChartContainer.appendChild(privateDiv);
+
+  // Clear and update Public Sector Table
+  const publicTableContainer = document.getElementById("public-sector-table");
+  publicTableContainer.innerHTML = ""; // Clear previous content
+  const publicTableScript = document.createElement("script");
+  publicTableScript.type = "text/javascript";
+  publicTableScript.defer = true;
+  publicTableScript.src = `https://datawrapper.dwcdn.net/${tableIds[variable].public}/embed.js`;
+  publicTableScript.setAttribute("charset", "utf-8");
+  publicTableScript.setAttribute("data-target", `#datawrapper-vis-${tableIds[variable].public}`);
+  const publicTableDiv = document.createElement("div");
+  publicTableDiv.style.minHeight = "400px";
+  publicTableDiv.id = `datawrapper-vis-${tableIds[variable].public}`;
+  publicTableDiv.appendChild(publicTableScript);
+  publicTableContainer.appendChild(publicTableDiv);
+
+  // Clear and update Private Sector Table
+  const privateTableContainer = document.getElementById("private-sector-table");
+  privateTableContainer.innerHTML = ""; // Clear previous content
+  const privateTableScript = document.createElement("script");
+  privateTableScript.type = "text/javascript";
+  privateTableScript.defer = true;
+  privateTableScript.src = `https://datawrapper.dwcdn.net/${tableIds[variable].private}/embed.js`;
+  privateTableScript.setAttribute("charset", "utf-8");
+  privateTableScript.setAttribute("data-target", `#datawrapper-vis-${tableIds[variable].private}`);
+  const privateTableDiv = document.createElement("div");
+  privateTableDiv.style.minHeight = "400px";
+  privateTableDiv.id = `datawrapper-vis-${tableIds[variable].private}`;
+  privateTableDiv.appendChild(privateTableScript);
+  privateTableContainer.appendChild(privateTableDiv);
 }
+
+// Initialize the dashboard on page load
+document.addEventListener("DOMContentLoaded", function() {
+  document.getElementById("variable-select").value = "education-level"; // Default variable
+  updateContent();
+});
 </script>
 ```
 
@@ -66,30 +220,185 @@ function updateContent() {
 
 <div>
 
-
-<label for="variable-select">Select a Variable:</label>
-  <select id="variable-select" onchange="updateContent()"> 
-    <option value="province">Province</option>
-    <option value="cma">CMA</option>
-    <option value="age-group">Age group</option>
-    <option value="gender">Gender</option>
-    <option value="family-type">Family type</option>
-    <option value="youngest-child">Youngest child</option>
-    <option value="education-level">Education level</option>
-    <option value="student-status">Student status</option>
-    <option value="immigration">Immigration</option>
-    <option value="occupation">Occupation</option>
-    <option value="industry">Industry</option>
-    <option value="establishment-size">Establishment size</option>
-    <option value="firm-size">Firm size</option>
-    <option value="employment-status">Employment status</option>
-    <option value="job-tenure">Job tenure</option></select>
+<label for="variable-select">Select a Variable:</label> <select id="variable-select" onchange="updateContent()"> <option value="province">Province</option> <option value="cma">CMA</option> <option value="age-group">Age group</option> <option value="gender">Gender</option> <option value="family-type">Family type</option> <option value="youngest-child">Youngest child</option> <option value="education-level">Education level</option> <option value="student-status">Student status</option> <option value="immigration">Immigration</option> <option value="occupation">Occupation</option> <option value="industry">Industry</option> <option value="establishment-size">Establishment size</option> <option value="firm-size">Firm size</option> <option value="employment-status">Employment status</option> <option value="job-tenure">Job tenure</option></select>
 
 </div>
+
+# Home {scrolling="false"}
+
+[<b>A data portrait of Canadian union density</b>]{style="font-size:26px;"}
+
+**This dashboard** allows the user to visually explore open-access data on trade union membership in Canada. The data source is the [Labour Force Survey](https://www23.statcan.gc.ca/imdb-bmdi/pub/3701-eng.htm) published by Statistics Canada. Patterns in union density can be observed across 16 different variables related to demographics, employment, and geography.
+
+The main measure presented is `UNION DENSITY` which is defined as the percentage of paid employees that are union members for each level of the dependent variable. Click `GET THE DATA` in the chart or table footer to download the source data.
+
+-   `INFO` - more detailed information on the data source and variable definitions.
+
+-   `CHARTS` - view the union density charts. Use the top toolbar to select variables.
+
+-   `TABLE` - view the chart data in tabular format for each sector.
+
+[<b>A brief history of union density in Canada</b>]{style="font-size:26px;"}
+
+-   `Grey zone:` Prior to 1872, it was illegal for workers to organize unions in Canada. Following the passage of the [Trade Union Act](https://rdo-olr.org/wp-content/uploads/2018/02/olr_16.2_Chartrand.pdf) that year, unions existed in a legal grey zone. Workers were no longer officially forbidden from creating unions, however, they had virtually no legal rights or protections in that area. Employers had no obligation to bargain with their employees, nor to even abide by the terms of an agreement were one to be rarely signed.
+
+-   `Post-war take-off:` Unions left the grey zone at end of World War Two, which was capped off by a [massive strike by Ford workers in Windsor in 1945](https://canadianlabour.ca/who-we-are/history/1945-windsors-ford-strike/). In the wake of that strike, a system of formalized and legally bound collective bargaining was created, along the lines of the [Wagner](https://www.nlrb.gov/about-nlrb/who-we-are/our-history/1935-passage-of-the-wagner-act) model of industrial relations adopted in the United States. A key legal ruling establishing what is known as [*the Rand Formula*](https://canadianlabour.ca/who-we-are/history/the-rand-decision-everyone-who-benefits-should-contribute/) established that all who benefit from a union contract should pay dues to the union. As a result, union membership and activity expanded greatly from 1940s to the mid 1960s.
+
+-   `Public sector bargaining:` While public sector workers could also form unions, they did not win the right to collective bargaining alongside their private sector counterparts. It was not until 1965 that public sector workers won the right to bargain - a victory won by an [illegal wildcat strike by postal workers](https://canadianlabour.ca/who-we-are/history/1965-public-service-workers-win-bargaining-rights/).
+
+-   `The long decline:` Union density hit a high point of 38% in 1984 and has been trending downward since. Throughout the neoliberal era, governments and employers alike have undermined unions and labour rights. Those attacks, along with structural changes in the global and national economy like off-shoring manufacturing jobs, caused a long-term decline in union density that has continued to this day.
+
+<br>
+
+::: {#datawrapper-vis-b2njK style="min-height:486px"}
+```{=html}
+<script type="text/javascript" defer src="https://datawrapper.dwcdn.net/b2njK/embed.js" charset="utf-8" data-target="#datawrapper-vis-b2njK"></script>
+```
+
+<noscript><img src="https://datawrapper.dwcdn.net/b2njK/full.png"/></noscript>
+:::
+
+<br>
+
+[<b>Why compare private and public sector?</b>]{style="font-size:26px;"}
+
+The data is categorized by employment sector, distinguishing private from public sector labour dynamics. This approach recognizes the significant differences in union density and membership trends between sectors, without framing them in opposition to one another.
+
+Unionization rates began high in the public sector and have slowly risen over time. In 1997, about 69% of public employees were unionized, growing to 73% by 2024. In the private sector, unionization rates have always much lower and have drastically diminished over time, falling from 19.3% in 1997 to just 13.5% in 2024.
+
+One reason for this difference is that much bargaining in the public sector takes place at the central or industry-level. For example, in most provinces, the majority public sector workers in particular fields (e.g., teachers or nurses) across the province are members of the same union. Most private sector workers, by contrast, work in small to medium sized firms that stand alone. Those workplaces are more difficult to unionize and result in much smaller unions unless joined by broader industry-level bargaining.
+
+Another reason is that public sector jobs cannot be off-shored in the same way private sector jobs can. Off-shoring manufacturing has caused employment to shift from more to less unionized industries, as manufacturing jobs are replaced with service industry jobs.
+
+<br>
+
+::: {#datawrapper-vis-gZmUd style="min-height:463px"}
+```{=html}
+<script type="text/javascript" defer src="https://datawrapper.dwcdn.net/gZmUd/embed.js" charset="utf-8" data-target="#datawrapper-vis-gZmUd"></script>
+```
+
+<noscript><img src="https://datawrapper.dwcdn.net/gZmUd/full.png"/></noscript>
+:::
+
+# Info {orientation="rows" scrolling="true"}
+
+## Row
+
+::: {.card title = "DATA SOURCE" fill="false"}
+
+-   **Source:** The source for all data beyond the home page is the [Labour Force Survey (LFS) Public Use Micro-data File (PUMF)](https://www150.statcan.gc.ca/n1/en/catalogue/71M0001X) published by Statistics Canada. For more information about the Labour Force Survey, please see the [official guide](https://www150.statcan.gc.ca/n1/pub/71-543-g/71-543-g2020001-eng.htm) produced by StatCan.
+
+-   **Years covered:** 2006 to current (2024)
+
+-   **Estimates:** Public use microdata files have been altered by StatCan to protect the privacy of respondents, so that they might be released as open-access data. Accordingly, estimates produced with a PUMF may vary slightly from officially published data produced by StatCan. The estimated values are provided as-is without any indicators of estimate quality, such as a coefficient of variation (cv) or confidence intervals.
+
+-   **Population:** Only the **workforce of paid employees** either in the public or private sector are included in this report. That means people that are not in the labour force, unemployed, self-employed or unpaid family workers are not included in counts and proportions.
+
+-   **Exclusions:** Some parts of the population are excluded from the LFS itself, including people living on reserves, full-time military personnel and institutionalized/incarcerated peoples.
+
+-   **Updates:** Data is refreshed on a monthly basis with a one month lag, following the PUMF release schedule.
+
+:::
+
+## Row
+
+::: {.card title="VARIABLES" fill="false"}
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Variable           | Notes - [Source: Guide to the Labour Force](https://www150.statcan.gc.ca/n1/pub/71-543-g/71-543-g2020001-eng.htm)                                                                                                                                                                                      |
++====================+========================================================================================================================================================================================================================================================================================================+
+| Sector             | -   Does the employee work in the public or private sector?                                                                                                                                                                                                                                            |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   The **public sector** includes employees in federal, provincial, territorial, municipal and Aboriginal public administrations, as well as in Crown corporations, liquor control boards and other government institutions such as schools (including universities), hospitals and public libraries. |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   The **private sector** comprises all other employees that are not in the public sector, including paid employees, as well as self-employed people and unpaid family workers (not included in this report).                                                                                         |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Province           | -   Province of residence at time of survey                                                                                                                                                                                                                                                            |
+|                    | -   Territories are not included in the LFS data                                                                                                                                                                                                                                                       |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| CMA                | -   [Census Metropolitan Area](https://www150.statcan.gc.ca/n1/pub/92-195-x/2021001/geo/cma-rmr/cma-rmr-eng.htm) of residence at time of survey                                                                                                                                                        |
+|                    | -   Includes the 9 largest CMAs vs. All other CMAs/Non-CMA areas                                                                                                                                                                                                                                       |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Age group          | -   Age of respondent (4 groups)                                                                                                                                                                                                                                                                       |
+|                    | -   Data is collected from people ages 15 and up                                                                                                                                                                                                                                                       |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Gender             | -   Gender of respondent                                                                                                                                                                                                                                                                               |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Data on more diverse gender identities isn't available at this time                                                                                                                                                                                                                                |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Family type        | -   Family type of respondent                                                                                                                                                                                                                                                                          |
+|                    | -   The LFS uses the [economic family concept](https://www23.statcan.gc.ca/imdb/p3Var.pl?Function=Unit&Id=33863) to categorize family arrangements                                                                                                                                                     |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Youngest child     | -   Age of respondent's youngest child (if any) in years, 1-24 years old                                                                                                                                                                                                                               |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Education level    | -   Highest education level attained by respondent                                                                                                                                                                                                                                                     |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Student status     | -   Student Status of respondent                                                                                                                                                                                                                                                                       |
+|                    | -   Whether the respondent is attending an educational program during the reference week, regardless of the level of that program                                                                                                                                                                      |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Immigration        | -   Whether the respondent was born in Canada or immigrated to Canada                                                                                                                                                                                                                                  |
+|                    | -   People that have been landed immigrants or permanent residents of Canada are counted as immigrants, regardless of citizenship status                                                                                                                                                               |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Occupation         | -   Occupation of respondent                                                                                                                                                                                                                                                                           |
+|                    | -   Based on type of work performed by respondent during the reference week                                                                                                                                                                                                                            |
+|                    | -   10 categories based on the National Occupational Classification System ([NOCS](https://noc.esdc.gc.ca/)) 2021 version                                                                                                                                                                              |
+|                    | -   *Note*: some series are missing entirely, as there are too few of certain occupation types in a sector to produce usable values (*e.g.* public administration workers in the private sector)                                                                                                       |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Industry           | -   Industry of employment of respondent                                                                                                                                                                                                                                                               |
+|                    | -   Based on general nature of business carried out in the establishment of work                                                                                                                                                                                                                       |
+|                    | -   21 categories based on the National Industry Classification System ([NAICS](https://www23.statcan.gc.ca/imdb/p3VD.pl?Function=getVD&TVD=1181553)) 2021 version                                                                                                                                     |
+|                    | -   *Note*: some series are missing entirely, as there is too little employment in an industry to produce usable values (*e.g.* manufacturing employment the public sector)                                                                                                                            |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Establishment size | -   Size of the establishment the respondent works in                                                                                                                                                                                                                                                  |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Establishment size refers to the number employees at the location of employment (*e.g.* a building or compound)                                                                                                                                                                                    |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Firm size          | -   Size of the firm the respondent works in.                                                                                                                                                                                                                                                          |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Firm size refers to the number of employees that work at all locations of a given business/organizational entity (*e.g.* a corporation or non-profit)                                                                                                                                              |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Employment size    | -   Employment status markers                                                                                                                                                                                                                                                                          |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Standard/Non-standard employment                                                                                                                                                                                                                                                                   |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   NSE: employees in any combination of the following, part-time, temporary, multiple-jobholders, precarious self-employed (not included)                                                                                                                                                         |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Standard: The absence of any of the NSE markers above.                                                                                                                                                                                                                                         |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   More information on [how NSE was categorized using method in source.](https://www.erudit.org/en/journals/ri/2022-v77-n1-ri06959/1088554ar/)                                                                                                                                                    |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Full-time/Part-time                                                                                                                                                                                                                                                                                |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Full time: usually works 30 hours per week at main/only job                                                                                                                                                                                                                                    |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Part-time: usually works under 30 hours at main/only job                                                                                                                                                                                                                                       |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Permanent/Temporary                                                                                                                                                                                                                                                                                |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Permanent: Expected to last as long as the employee wants it, business conditions permitting; no pre-determined contract end date.                                                                                                                                                             |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Temporary: Expected to end at a pre-determined date or after the completion of a particular project; seasonal, temporary, term-based or contract employees.                                                                                                                                    |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Single/Multiple job holders                                                                                                                                                                                                                                                                        |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    |     -   Multiple job holders worked at two or more jobs during the reference week.                                                                                                                                                                                                                     |
+|                    |                                                                                                                                                                                                                                                                                                        |
+|                    | -   Proportions add up to 100% for each sub-group by sector, counts add up to the total number of employees in each sub-group.                                                                                                                                                                         |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Job tenure         | -   Respondent's job tenure in years, under one to ten+ years                                                                                                                                                                                                                                          |
+|                    | -   Number of consecutive months or years respondent has worked for the same employer                                                                                                                                                                                                                  |
+|                    | -   [Source of tenure categories here](https://www150.statcan.gc.ca/n1/pub/14-28-0001/2024001/article/00007-eng.htm)                                                                                                                                                                                   |
++--------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+:::
 
 # Charts {orientation="rows" fill="false" flow="false"}
 
 ## 
+
+:::: card
+::: {#private-sector-chart}
+<!-- Placeholder for dynamically injected embed -->
+:::
+::::
 
 :::: card
 ::: {#public-sector-chart}
@@ -97,8 +406,16 @@ function updateContent() {
 :::
 ::::
 
+# Tables
+
 :::: card
-::: {#private-sector-chart}
+::: {#private-sector-table}
+<!-- Placeholder for dynamically injected embed -->
+:::
+::::
+
+:::: card
+::: {#public-sector-table}
 <!-- Placeholder for dynamically injected embed -->
 :::
 ::::
